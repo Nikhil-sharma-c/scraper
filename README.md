@@ -46,7 +46,32 @@ validator, drift detector, health score, doctor and healing history work unchang
 6. **Demo replay mode** — bundled HTML snapshots simulate a site redesign on stage;
    the whole loop runs offline, guaranteed.
 
-## Quick start
+## Quickstart for judges (60 seconds, no accounts needed)
+
+Zero dependencies beyond **Python 3.10+** (stdlib only — nothing to pip install).
+The demo replays bundled HTML snapshots of real Hacker News pages, so it works
+fully offline:
+
+```bash
+git clone https://github.com/<you>/scrape-verse.git
+cd scrape-verse
+
+python sv.py demo hn_v1.html            # 🟢 healthy baseline (30/30 stories)
+python sv.py demo hn_v2.html            # ⚠️ simulated site redesign → drift detected + AI doctor report
+python sv.py heal --mode 'demo:hn_v2.html->hn_v3.html'   # 🤖 diagnose → repair → verify → ✅ accepted
+python sv.py health                     # health score breakdown
+python sv.py dashboard                  # generates dashboard.html (open in browser)
+```
+
+Optional cloud mode (real extraction via Bright Data Scraper Studio):
+
+```bash
+npm i -g @brightdata/cli && bdata login       # one-time OAuth
+python sv.py run --mode cloud                 # run pinned Collector c_mt39p31p2mji0agjy0
+python sv.py heal --mode auto                 # closed-loop healing against the live site
+```
+
+## Full CLI tour
 
 ```bash
 # 1. Run + validate + score (auto: cloud collector, falls back to local extractor)

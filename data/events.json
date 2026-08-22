@@ -1,0 +1,67 @@
+[
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "run",
+    "message": "Run recorded: hackernews via demo — 30 records, completeness 99%",
+    "target": "hackernews",
+    "mode": "demo",
+    "run_id": "20260822-082953.556600-demo"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "run",
+    "message": "Run recorded: hackernews via demo — 30 records, completeness 61%",
+    "target": "hackernews",
+    "mode": "demo",
+    "run_id": "20260822-082953.058600-demo"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "drift",
+    "message": "Schema drift detected: author 100%->3%; points 97%->0%",
+    "target": "hackernews",
+    "severity": "critical"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "run",
+    "message": "Run recorded: hackernews via demo:hn_v2.html->hn_v3.html — 30 records, completeness 61%",
+    "target": "hackernews",
+    "mode": "demo:hn_v2.html->hn_v3.html",
+    "run_id": "20260822-082953.539100-demo:hn_v2.html->hn_v3.html"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "diagnosis",
+    "message": "Selector/layout drift: page structure changed so that author, points no longer match while other fields still extract fine. Historical comparison confirms regression: author (3% -> 3%), points (0% -> 0%). (confidence 98%)",
+    "target": "hackernews"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "heal_started",
+    "message": "Healing c_mt39p31p2mji0agjy0: author at 3% (1/30); points at 0% (0/30)",
+    "target": "hackernews"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "run",
+    "message": "Run recorded: hackernews via demo:hn_v2.html->hn_v3.html — 30 records, completeness 80%",
+    "target": "hackernews",
+    "mode": "demo:hn_v2.html->hn_v3.html",
+    "run_id": "20260822-082953.899500-demo:hn_v2.html->hn_v3.html"
+  },
+  {
+    "ts": "2026-08-22T08:29:53Z",
+    "kind": "repair_accepted",
+    "message": "Health 84.3->92.0; recorded v2",
+    "target": "hackernews"
+  },
+  {
+    "ts": "2026-08-22T08:33:15Z",
+    "kind": "run",
+    "message": "Run recorded: hackernews via local — 30 records, completeness 99%",
+    "target": "hackernews",
+    "mode": "local",
+    "run_id": "20260822-083315.315000-local"
+  }
+]

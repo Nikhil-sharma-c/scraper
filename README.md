@@ -1,57 +1,138 @@
-# Into the Scrape-Verse — Self-Healing Hacker News Scraper
+# Into the Scrape-Verse — Self-Healing Web Scraping Agent
 
 WeMakeDevs × Bright Data hackathon entry (Aug 17–23, 2026).
 
 ## What this is
 
-A **self-healing web scraper** built on [Bright Data Scraper Studio](https://brightdata.com),
-driven entirely from the terminal via the `bdata` CLI inside an AI coding agent (Hermes Agent).
+A **model-agnostic, self-healing web scraping agent**. Describe the data you want in
+plain language; a Bright Data AI Collector extracts it in the cloud. When the target
+site redesigns, extraction fails *silently* — so Scrape-Verse wraps every run in a
+closed loop:
 
-The core idea: instead of hand-writing CSS selectors that break when a site redesigns,
-we describe the data we want in plain language. Bright Data's AI generates and hosts the
-scraper (a "Collector"). When the target site changes its layout, the scraper is repaired
-with a single prompt (`bdata scraper heal`) — same Collector ID, same output shape,
-nothing downstream breaks.
+```
+run → validate → compare with previous runs → diagnose → heal
+    → re-run → verify → accept ✅ / reject + rollback ❌
+```
+
+Two execution modes, one schema:
+
+| Mode | Engine | Use case |
+|------|--------|----------|
+| ☁️ Cloud | Bright Data Scraper Studio Collector | production reliability |
+| 💻 Local | stdlib Python extractor (`scrape_verse/local_extract.py`) | privacy, cost, offline |
+
+Both produce identical records (`title, url, points, author, comment_count`), so the
+validator, drift detector, health score, doctor and healing history work unchanged.
+
+- **Collector ID:** `c_mt39p31p2mji0agjy0`
+  ([dashboard](https://brightdata.com/cp/scrapers/c_mt39p31p2mji0agjy0))
+- **Target:** Hacker News front page · 30 stories · 5 fields
+
+## Features
+
+1. **Schema-drift detector** — profiles field completeness per run and diffs against
+   the previous run. `points: 97% → 0% (CRITICAL)` fires automatically; no human
+   staring at dashboards.
+2. **Scraper Health Score** — five weighted components (schema validity, field
+   completeness, record count, URL validity, historical consistency) rolled into
+   🟢 HEALTHY ≥85 / 🟡 DEGRADED ≥60 / 🔴 BROKEN <60.
+3. **AI Scraper Doctor** — turns raw failures into an evidence-based diagnosis with
+   confidence % and a scoped repair prompt ("fix ONLY these selectors, don't disturb
+   the working fields").
+4. **Healing version history** — every accepted/rejected repair is recorded:
+   `v3 · reason · health_before → health_after · prompt`.
+5. **Automatic verification + rollback** — a repair is only kept if health actually
+   improves and drift clears; otherwise it's rejected and rolled back.
+6. **Demo replay mode** — bundled HTML snapshots simulate a site redesign on stage;
+   the whole loop runs offline, guaranteed.
+
+## Quick start
+
+```bash
+# 1. Run + validate + score (auto: cloud collector, falls back to local extractor)
+python sv.py run
+
+# 2. Health dashboard in your terminal
+python sv.py health
+python sv.py compare          # field-by-field diff of recent runs
+
+# 3. Diagnose like a doctor
+python sv.py doctor
+
+# 4. Full closed-loop healing (detect → diagnose → heal → re-run → verify)
+python sv.py heal --mode auto
+
+# 5. Version history of repairs
+python sv.py history
+python sv.py events           # event log
+
+# 6. Guaranteed live demo (works offline)
+python tools/build_snapshots.py        # once; fetches real HN, derives drifted variants
+python sv.py demo hn_v1.html           # healthy baseline
+python sv.py demo hn_v2.html           # ⚠️ drift detected → doctor report
+python sv.py heal --mode 'demo:hn_v2.html->hn_v3.html'   # repair accepted (+health)
+python sv.py heal --mode 'demo:hn_v2.html->hn_v4_badrepair.html'  # ❌ rejected + rollback
+
+# 7. Static HTML dashboard
+python sv.py dashboard                 # → dashboard.html
+```
+
+Legacy entry points still work: `python validate.py hn_result.json`, `bash heal.sh`.
+
+## Demo story (10 steps)
+
+1. Natural-language request → Collector created
+2. Scrape data (cloud or local)
+3. "Website redesign" (replay `hn_v2.html`)
+4. Extraction silently breaks — `points 97%→0%, author 100%→3%`
+5. Scrape-Verse detects drift automatically
+6. Doctor diagnoses: selector/layout drift, confidence 94–98%, evidence listed
+7. Scoped heal prompt sent to Bright Data Collector
+8. Re-scrape after repair
+9. Verification: health must improve AND drift must clear
+10. Repair **accepted** (recorded as vX) or **rejected + rolled back**
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────────────┐     ┌──────────────┐
-│  scheduler   │ --> │ bdata scraper run    │ --> │ hn_result.json│
-│  (cron/GH Act)│    │ c_mt37n2r5qje96fkb7  │     │ (raw data)    │
-└─────────────┘     └──────────┬───────────┘     └──────┬───────┘
-                               │ on failure / schema drift │
-                               ▼                        ▼
-                    ┌──────────────────────┐     ┌──────────────┐
-                    │ bdata scraper heal    │     │ validate.py   │
-                    │ (AI repairs selector) │     │ (schema check)│
-                    └──────────────────────┘     └──────────────┘
+                ┌──────────────────────────────────────────┐
+                │               sv.py (CLI)                │
+                └───────┬─────────────────────┬────────────┘
+                        │                     │
+              ┌─────────▼────────┐   ┌────────▼─────────┐
+              │  CLOUD MODE      │   │  LOCAL MODE       │
+              │  bdata scraper   │   │  stdlib HTML      │
+              │  run/heal        │   │  extractor        │
+              └─────────┬────────┘   └────────┬─────────┘
+                        └────────┬────────────┘
+                                 ▼
+                    identical JSON schema
+                                 ▼
+             ┌──────────────────────────────────────┐
+             │ core.py: profile → compare → health  │
+             │ doctor: diagnosis + scoped prompt    │
+             │ healer: heal → re-run → verify       │
+             │         accept ✅ / reject+rollback  │
+             └──────────────────┬───────────────────┘
+                                ▼
+            data/runs.json · versions.json · events.json
+                                ▼
+                  terminal output + dashboard.html
 ```
-
-- **Collector ID:** `c_mt39p31p2mji0agjy0` ([view in dashboard](https://brightdata.com/cp/scrapers/c_mt39p31p2mji0agjy0))
-- **Target:** Hacker News front page
-- **Output shape:** `{stories: [{title, url, points, author, comment_count}], product_page_url, input}`
 
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `validate.py` | Schema validation — detects silent extraction failures |
-| `heal.sh` | One-command self-heal loop: run → validate → heal → re-run |
-| `hn_result.json` | Latest scrape output |
-
-## Usage
-
-```bash
-# Run the scraper
-bdata scraper run c_mt37n2r5qje96fkb7 "https://news.ycombinator.com" --json -o hn_result.json
-
-# Validate the output
-python validate.py hn_result.json
-
-# Full self-healing loop
-bash heal.sh
-```
+| `sv.py` | CLI: run/health/doctor/compare/heal/history/events/demo/dashboard |
+| `scrape_verse/core.py` | profiling, drift detection, health score, doctor, version/event stores |
+| `scrape_verse/local_extract.py` | dependency-free HN extractor (dual-markup) |
+| `scrape_verse/healer.py` | closed-loop orchestration + accept/reject verification |
+| `scrape_verse/dashboard.py` | static dark-theme HTML dashboard generator |
+| `tools/build_snapshots.py` | builds demo snapshots from live HN (or synthetic fallback) |
+| `demo/hn_v1..v4*.html` | healthy page, redesigned page, partial fix, bad-repair page |
+| `validate.py`, `heal.sh` | original hackathon entry points (still functional) |
+| `data/*.json` | run history, healing versions, event log |
 
 ## Why self-healing matters
 
@@ -61,6 +142,7 @@ Traditional scrapers die quietly:
 .product-grid > .card .price   →   site redesign   →   returns []
 ```
 
-Nobody notices until the dashboard is empty for a week. This project closes that loop:
-validation detects the drift, healing rewrites the extraction against the original
-plain-language description, and the data keeps flowing.
+Nobody notices until the dashboard is empty for a week. Scrape-Verse closes that loop:
+drift is detected within one run cycle, the diagnosis is specific enough to act on,
+the repair is verified against a health baseline, and a bad repair can never silently
+replace a good scraper.

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><title>Scrape-Verse Dashboard</title>
+<style>
+ body { font-family: ui-sans-serif, system-ui, sans-serif; background:#0b1020; color:#e5e7eb;
+        margin:0; padding:2rem; }
+ h1 { letter-spacing:.02em; } .muted { color:#94a3b8; }
+ .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:1rem; margin-top:1rem; }
+ .card { background:#111827; border:1px solid #1f2937; border-radius:14px; padding:1.2rem 1.4rem; }
+ .score { font-size:2.6rem; font-weight:700; margin:.2rem 0 .8rem; }
+ .bar-row { display:flex; align-items:center; gap:.6rem; margin:.35rem 0; font-size:.85rem; }
+ .bar-row span { width:150px; color:#9ca3af; }
+ .bar { flex:1; height:8px; background:#1f2937; border-radius:99px; overflow:hidden; }
+ .fill { height:100%; background:linear-gradient(90deg,#22d3ee,#34d399); }
+ table { border-collapse:collapse; width:100%; margin-top:1rem; font-size:.88rem; }
+ td, th { text-align:left; padding:.45rem .6rem; border-bottom:1px solid #1f2937; vertical-align:top; }
+ th { color:#9ca3af; font-weight:500; }
+ .stats { display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem; }
+ .stat { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:.8rem 1.3rem; text-align:center; min-width:120px; }
+ .num { font-size:1.5rem; font-weight:700; color:#22d3ee; }
+ .mono { font-family:ui-monospace,monospace; color:#94a3b8; }
+</style></head><body>
+<h1>🪐 SCRAPE-VERSE</h1>
+<p class="muted">Self-healing scraping agent — model-agnostic · cloud (Bright Data) + local mode</p>
+<div class="grid">
+        <div class="card">
+          <h3>Hacker News <span style="color:#16a34a;font-weight:600">🟢 HEALTHY</span></h3>
+          <div class="score">92%</div>
+          <div class="bar-row"><span>Schema Validity</span><div class="bar"><div class="fill" style="width:80.0%"></div></div><b>80%</b></div><div class="bar-row"><span>Field Completeness</span><div class="bar"><div class="fill" style="width:80.0%"></div></div><b>80%</b></div><div class="bar-row"><span>Record Count</span><div class="bar"><div class="fill" style="width:100.0%"></div></div><b>100%</b></div><div class="bar-row"><span>Url Validity</span><div class="bar"><div class="fill" style="width:100.0%"></div></div><b>100%</b></div><div class="bar-row"><span>Historical Consistency</span><div class="bar"><div class="fill" style="width:100.0%"></div></div><b>100%</b></div>
+        </div>
+</div>
+<h2 style="margin-top:2rem">Healing Stats</h2>
+<div class="stats">
+      <div class="stat"><div class="num">4</div><div>runs recorded</div></div>
+      <div class="stat"><div class="num">100.0%</div><div>repair success</div></div>
+      <div class="stat"><div class="num">+8</div><div>avg health gain</div></div>
+      <div class="stat"><div class="num">2</div><div>collector versions</div></div>
+</div>
+<h2 style="margin-top:2rem">Recent Events</h2>
+<table><tr><th>time (UTC)</th><th>event</th><th>detail</th></tr>
+<tr><td class='mono'>08:29:53</td><td>repair_accepted</td><td>Health 84.3-&gt;92.0; recorded v2</td></tr><tr><td class='mono'>08:29:53</td><td>run</td><td>Run recorded: hackernews via demo:hn_v2.html-&gt;hn_v3.html — 30 records, completeness 80%</td></tr><tr><td class='mono'>08:29:53</td><td>heal_started</td><td>Healing c_mt39p31p2mji0agjy0: author at 3% (1/30); points at 0% (0/30)</td></tr><tr><td class='mono'>08:29:53</td><td>diagnosis</td><td>Selector/layout drift: page structure changed so that author, points no longer match while other fields still extract fine. Historical comparison confirms regression: author (3% -&gt; 3%), points (0% -&gt; 0%). (confidence 98%)</td></tr><tr><td class='mono'>08:29:53</td><td>run</td><td>Run recorded: hackernews via demo:hn_v2.html-&gt;hn_v3.html — 30 records, completeness 61%</td></tr><tr><td class='mono'>08:29:53</td><td>drift</td><td>Schema drift detected: author 100%-&gt;3%; points 97%-&gt;0%</td></tr><tr><td class='mono'>08:29:53</td><td>run</td><td>Run recorded: hackernews via demo — 30 records, completeness 61%</td></tr><tr><td class='mono'>08:29:53</td><td>run</td><td>Run recorded: hackernews via demo — 30 records, completeness 99%</td></tr>
+</table>
+<p class="muted" style="margin-top:2rem">Static snapshot — regenerate with <code>sv dashboard</code>.</p>
+</body></html>

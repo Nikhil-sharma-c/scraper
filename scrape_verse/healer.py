@@ -9,12 +9,28 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 from . import core
 from .core import (Diagnosis, TARGETS, compare, diagnose, health_score,
                    log_event, record_version)
+
+
+def _find_bdata() -> str:
+    """Resolve the bdata executable (Windows needs the .cmd shim explicitly)."""
+    for name in ("bdata", "bdata.cmd", "bdata.exe"):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise RuntimeError("bdata CLI not found on PATH — run `npm i -g @brightdata/cli`")
+
+
+def _run_bdata(args: list, timeout: int) -> subprocess.CompletedProcess:
+    cmd = [_find_bdata(), *args]
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
 
 ROOT = core.ROOT
 DEMO_DIR = os.path.join(ROOT, "demo")
@@ -28,17 +44,16 @@ def run_cloud(target: str = "hackernews", out_path: str | None = None) -> str:
     """Run a Bright Data collector; returns path to result JSON."""
     t = TARGETS[target]
     out = os.path.abspath(out_path or os.path.join(ROOT, f"{target}_result.json"))
-    cmd = ["bdata", "scraper", "run", t["collector"], t["url"], "--json", "-o", out]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    proc = _run_bdata(["scraper", "run", t["collector"], t["url"], "--json", "-o", out],
+                      timeout=900)
     if proc.returncode != 0:
         raise RuntimeError(f"bdata scraper run failed:\n{proc.stdout}\n{proc.stderr}")
     return out
 
 
 def heal_cloud(collector_id: str, prompt: str) -> None:
-    cmd = ["bdata", "scraper", "heal", collector_id, prompt,
-           "--auto-approve", "--auto-save"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    proc = _run_bdata(["scraper", "heal", collector_id, prompt,
+                       "--auto-approve", "--auto-save"], timeout=1800)
     if proc.returncode != 0:
         raise RuntimeError(f"bdata scraper heal failed:\n{proc.stdout}\n{proc.stderr}")
 

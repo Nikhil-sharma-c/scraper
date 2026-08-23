@@ -81,11 +81,27 @@ python -m scrape_verse.server
 ```
 
 Paste any public URL plus a plain-language query ("get product name and price
-from every listing") and Bright Data's AI builds a collector, runs it, and
-scores it through the standard pipeline. Each site gets its own health card
-with **View data** (filterable table, copy/download JSON) and **↻ Re-run**
-actions, plain-language status, a live progress stepper while jobs run, an
-activity feed, and the repair history.
+from every listing") and each site gets its own health card with **View data**
+(filterable table, copy/download JSON) and **↻ Re-run** actions, plain-language
+status, a live progress stepper while jobs run, an activity feed, and the
+repair history.
+
+### Choose your backend
+
+| | 🤖 AI Agent | 🔌 My own API |
+|---|---|---|
+| Who extracts | Bright Data's AI builds & runs a collector | your HTTP endpoint |
+| Contract | none — just paste URL + query | `POST {"url", "query"}` → JSON list of records |
+| Best for | hands-off scraping of hard sites | teams with existing scrapers/LLM endpoints |
+
+Both paths flow through the same local pipeline (validate → profile → health
+score → drift → repair history). Try the custom-API mode instantly:
+
+```bash
+python tools/example_api.py     # demo endpoint on http://127.0.0.1:9099/scrape
+```
+
+…then pick 🔌 My own API in the GUI and point it at that URL.
 
 A native Electron shell is also included:
 

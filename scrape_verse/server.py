@@ -80,22 +80,30 @@ def _preview(result_path: str, target_key: str = "hackernews", cap: int = 12) ->
 
 
 def _register_dynamic_target(job_id: str, url: str, query: str, collector_id: str = "",
-                             state: str = "building") -> dict:
+                             state: str = "building", backend: str = "agent") -> dict:
     """One card per URL — register/update a dynamic target for the fleet view."""
     from urllib.parse import urlparse as _up
     host = (_up(url).netloc or url).replace("www.", "")[:28] or "job"
     key = "site_" + uuid.uuid5(uuid.NAMESPACE_URL, url).hex[:8]
     core.register_target(key, label=host, url=url,
-                         collector_id=collector_id, query=query)
+                         collector_id=collector_id, query=query,
+                         backend=backend)
     core.set_target_state(key, state=state, job_id=job_id,
                           error=None if state not in ("error",) else "")
     return key
 
 
-def _run_scrape_job(job_id: str, url: str, query: str) -> None:
+def _run_scrape_job(job_id: str, url: str, query: str,
+                    backend: str = "agent", api_url: str = "",
+                    api_header: str = "") -> None:
     try:
-        # ---- real cloud path: create -> run -> evaluate -------------------
-        _set_job(job_id, status="creating", message="AI is building the collector…")
+        if backend == "api":
+            _run_api_job(job_id, url, query, api_url, api_header)
+            return
+
+        # ---- Bright Data agent path: create -> run -> evaluate -----------
+        _set_job(job_id, status="creating",
+                 message="Bright Data's AI is learning this website…")
         proc = _run_bdata(["scraper", "create", url, query[:500],
                            "--name", f"sv_{int(time.time())}", "--json"],
                           timeout=CREATE_TIMEOUT)
@@ -154,6 +162,74 @@ def _run_scrape_job(job_id: str, url: str, query: str) -> None:
                        target=target_key)
     except Exception as exc:
         _set_job(job_id, status="error", message=f"{exc.__class__.__name__}: {exc}")
+
+
+def _run_api_job(job_id: str, url: str, query: str,
+                 api_url: str, api_header: str) -> None:
+    """Bring-your-own backend: POST {url, query} to the user's endpoint.
+
+    Expected response is JSON containing an array of record objects — any of
+    results/data/items/rows/records/movies/products/posts/listings keys, a
+    top-level list, or the first list-of-dicts anywhere (same tolerance as
+    cloud payloads). The result then flows through the SAME validate →
+    profile → health-score pipeline as agent jobs.
+    """
+    import urllib.request
+    import urllib.error
+
+    def _fail(msg: str):
+        _set_job(job_id, status="error", message=msg)
+
+    target_key = _register_dynamic_target(job_id, url, query,
+                                          state="running", backend="api")
+    _set_job(job_id, status="running", target=target_key,
+             message=f"Calling your API… {api_url[:60]}")
+
+    payload = json.dumps({"url": url, "query": query[:500]}).encode()
+    req = urllib.request.Request(api_url, data=payload, method="POST")
+    req.add_header("Content-Type", "application/json")
+    if api_header:
+        name, _, value = api_header.partition(":")
+        if not value:
+            return _fail("custom header must look like 'Name: value'")
+        req.add_header(name.strip(), value.strip())
+
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as e:
+        return _fail(f"your API returned HTTP {e.code}")
+    except Exception as exc:
+        return _fail(f"could not reach your API ({exc.__class__.__name__}: "
+                     f"{str(exc)[:120]})")
+
+    out_path = os.path.join(core.DATA_DIR, f"jobs_{job_id}.json")
+    with open(out_path, "wb") as f:
+        f.write(body)
+
+    # sanity: does the payload actually contain records?
+    try:
+        probe = core.extract_records(json.loads(body.decode()), target_key)
+    except Exception:
+        probe = []
+    if not probe:
+        return _fail("API responded, but no usable records were found in the "
+                     "JSON (expected a list of objects under a key like "
+                     "'data', 'items', 'results'…)")
+
+    ctx = _evaluate(out_path, target_key, mode="api", source=f"custom API job: {query[:80]}")
+    n = ctx["run"]["profile"]["n_records"]
+    core.set_target_state(target_key, state="ready" if n else "no_data",
+                          job_id=job_id)
+    _set_job(job_id, status="done", run_id=ctx["run"]["id"], result_file=out_path,
+             target=target_key,
+             summary=(f"{ctx['health']['overall']}% · {ctx['health']['status']} · "
+                      f"{n} records"),
+             drift=ctx["drift"], health=ctx["health"],
+             preview=_preview(out_path, target_key))
+    core.log_event("gui_scrape",
+                   f"GUI custom-API job done: {url} → {n} records",
+                   target=target_key)
 
 
 def _rerun_job(job_id: str, target_key: str) -> None:
@@ -264,6 +340,7 @@ class Handler(BaseHTTPRequestHandler):
                     "collector": t["collector"], "state": st.get("state"),
                     "error": st.get("error"), "health": h,
                     "query": t.get("query", ""),
+                    "backend": t.get("backend", "agent"),
                     "last_run": ({
                         "id": last["id"], "when": last["timestamp"],
                         "records": last["profile"]["n_records"],
@@ -346,17 +423,28 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/scrape":
             url = (body.get("url") or "").strip()
             query = (body.get("query") or "").strip()
+            backend = (body.get("backend") or "agent").strip().lower()
+            api_url = (body.get("api_url") or "").strip()
+            api_header = (body.get("api_header") or "").strip()
             if not url.startswith(("http://", "https://")):
                 return self._json({"error": "url must start with http(s)://"}, 400)
             if not query:
                 return self._json({"error": "query is required (what should be scraped?)"},
                                   400)
+            if backend not in ("agent", "api"):
+                return self._json({"error": "backend must be 'agent' or 'api'"}, 400)
+            if backend == "api" and not api_url.startswith(("http://", "https://")):
+                return self._json({"error": "a valid API endpoint URL is required "
+                                            "for the custom API backend"}, 400)
             job_id = uuid.uuid4().hex[:12]
             # card appears immediately in the fleet view while building
-            _register_dynamic_target(job_id, url, query, state="building")
+            _register_dynamic_target(job_id, url, query,
+                                     state="building" if backend == "agent" else "running",
+                                     backend=backend)
             _set_job(job_id, status="queued", message="queued")
             threading.Thread(target=_run_scrape_job,
-                             args=(job_id, url, query), daemon=True).start()
+                             args=(job_id, url, query, backend, api_url, api_header),
+                             daemon=True).start()
             return self._json({"job_id": job_id}, 202)
 
         if route == "/api/rerun":

@@ -6,5 +6,31 @@
     "expected_records": 30,
     "query": "scrape all movie name, rating, casts and release date",
     "registered_at": "2026-08-23T09:03:13Z"
+  },
+  "site_4b10badc": {
+    "label": "youtube.com",
+    "url": "https://www.youtube.com/@riat_eng",
+    "collector": "c_mt5mvv4mw9b7ahqm4",
+    "expected_records": 30,
+    "query": "scrape this channel title , thumbnail and views",
+    "registered_at": "2026-08-23T10:01:47Z"
+  },
+  "site_29d4955b": {
+    "label": "books.example.com",
+    "url": "https://books.example.com/best-sellers",
+    "collector": "",
+    "expected_records": 30,
+    "query": "get book title, author and price",
+    "registered_at": "2026-08-23T10:44:05Z",
+    "backend": "api"
+  },
+  "site_880e21e4": {
+    "label": "x.example.com",
+    "url": "https://x.example.com",
+    "collector": "",
+    "expected_records": 30,
+    "query": "q",
+    "registered_at": "2026-08-23T10:47:31Z",
+    "backend": "api"
   }
 }

@@ -62,7 +62,8 @@ def get_target(key: str) -> dict:
 
 
 def register_target(key: str, label: str, url: str, collector_id: str = "",
-                    expected_records: int | None = None, query: str = "") -> dict:
+                    expected_records: int | None = None, query: str = "",
+                    **extra) -> dict:
     dyn = load_dynamic_targets()
     entry = {
         "label": label or key,
@@ -72,6 +73,7 @@ def register_target(key: str, label: str, url: str, collector_id: str = "",
         "query": query,
         "registered_at": utcnow(),
     }
+    entry.update(extra)                     # backend, api_url, api_header, …
     dyn[key] = entry
     _write_json(DYNAMIC_TARGETS_FILE, dyn)
     return entry
@@ -167,20 +169,34 @@ def is_url_ok(value) -> bool:
 
 
 def _observed_fields(records: list) -> list[str]:
-    """Union of record keys, order-stable (arbitrary-site schemas)."""
+    """Union of record keys, order-stable (arbitrary-site schemas).
+
+    Keys whose values are always containers (dict/list — e.g. Bright Data's
+    echoed `input` job params) are metadata, not data fields, and are skipped.
+    """
     names: list[str] = []
+    scalar_seen: dict[str, bool] = {}
     for rec in records:
         if isinstance(rec, dict):
-            for k in rec.keys():
-                if not k.startswith("_") and k not in names:
+            for k, v in rec.items():
+                if k.startswith("_"):
+                    continue
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    scalar_seen[k] = True
+                scalar_seen.setdefault(k, False)
+                if k not in names:
                     names.append(k)
-    return names[:12]
+    return [k for k in names if scalar_seen.get(k)][:12]
 
 
 def profile(records: list) -> dict:
     """Compute per-field completeness stats over a list of records."""
     observed = _observed_fields(records)
-    if set(REQUIRED_FIELDS) & set(observed):
+    # Use the HN schema only when records genuinely look like HN stories
+    # (most of its fields present) — two coincidental overlaps like
+    # title+author must NOT force HN judging onto foreign payloads.
+    hn_overlap = len(set(REQUIRED_FIELDS) & set(observed))
+    if hn_overlap >= 3:
         names = REQUIRED_FIELDS            # HN-schema family: judge all five
     else:
         names = observed                   # arbitrary site: judge its own fields

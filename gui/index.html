@@ -380,7 +380,7 @@ async function renderResult(j){
   } else {
     driftHtml = '<p class="tiny dim" style="margin:4px 0 8px">✓ Nothing changed vs the previous run.</p>';
   }
-  const bars = Object.entries(comps).map(([k,v]) =>
+  const bars = Object.entries(comps).filter(([,v]) => v != null).map(([k,v]) =>
     `<div class="comp"><div class="row"><span>${esc(k.replace(/_/g,' '))}</span><b>${Math.round(v)}%</b></div>
      <div class="bar"><i style="width:${v}%"></i></div></div>`).join('');
 

@@ -211,12 +211,26 @@ def profile(records: list) -> dict:
             valid += 1 if ok else 0
         pct = round(100.0 * valid / total, 2) if total else 0.0
         fields[name] = {"valid": valid, "total": total, "pct": pct}
-    urls_ok = sum(1 for r in records
-                  if isinstance(r, dict) and is_url_ok(r.get("url"))) if records else 0
+    # url validity: find links wherever they live (url, product_page_url,
+    # thumbnail, …) instead of assuming an HN-shaped schema. If the query
+    # asked for no link-like fields at all, this component is None/N-A.
+    any_urls = False
+    urls_ok = 0
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        links = [v for v in rec.values()
+                 if isinstance(v, str) and v.strip().lower().startswith(("http://", "https://"))]
+        if not links:
+            continue
+        any_urls = True
+        if all(is_url_ok(link) for link in links):
+            urls_ok += 1
     return {
         "n_records": len(records),
         "fields": fields,
-        "url_valid_pct": round(100.0 * urls_ok / len(records), 2) if records else 0.0,
+        "url_valid_pct": (round(100.0 * urls_ok / len(records), 2)
+                          if records and any_urls else None),
         "sample": deepcopy(records[:3]),
     }
 
@@ -373,7 +387,12 @@ def health_score(run: dict, prev: dict | None = None) -> dict:
     else:
         record_count = round(min(100.0, 100.0 * n / trec), 2)
 
-    url_validity = prof.get("url_valid_pct", 0.0)
+    # None = target legitimately has no link-like fields → N-A, not zero.
+    url_validity = prof.get("url_valid_pct")
+    if url_validity is None:
+        url_validity = None
+    else:
+        url_validity = float(url_validity)
 
     if prev is None:
         consistency = 100.0
@@ -390,10 +409,13 @@ def health_score(run: dict, prev: dict | None = None) -> dict:
         "schema_validity": schema_validity,
         "field_completeness": field_completeness,
         "record_count": record_count,
-        "url_validity": url_validity,
+        "url_validity": url_validity,          # may be None → excluded
         "historical_consistency": consistency,
     }
-    overall = round(sum(components[k] * WEIGHTS[k] for k in WEIGHTS), 1)
+    active = {k: v for k, v in components.items() if v is not None}
+    wsum = sum(WEIGHTS[k] for k in active)
+    overall = round(sum(components[k] * WEIGHTS[k] for k in active) / wsum, 1) \
+        if wsum else 0.0
     status, emoji = ("HEALTHY", "🟢") if overall >= 85 else \
                     ("DEGRADED", "🟡") if overall >= 60 else \
                     ("BROKEN", "🔴")

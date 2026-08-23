@@ -43,30 +43,24 @@ validator, drift detector, health score, doctor and healing history work unchang
    `v3 · reason · health_before → health_after · prompt`.
 5. **Automatic verification + rollback** — a repair is only kept if health actually
    improves and drift clears; otherwise it's rejected and rolled back.
-6. **Demo replay mode** — bundled HTML snapshots simulate a site redesign on stage;
-   the whole loop runs offline, guaranteed.
 
-## Quickstart for judges (60 seconds, no accounts needed)
+## Quickstart
 
 Zero dependencies beyond **Python 3.10+** (stdlib only — nothing to pip install).
-The demo replays bundled HTML snapshots of real Hacker News pages, so it works
-fully offline:
 
 ```bash
-git clone https://github.com/<you>/scrape-verse.git
-cd scrape-verse
-
-python sv.py demo hn_v1.html            # 🟢 healthy baseline (30/30 stories)
-python sv.py demo hn_v2.html            # ⚠️ simulated site redesign → drift detected + AI doctor report
-python sv.py heal --mode 'demo:hn_v2.html->hn_v3.html'   # 🤖 diagnose → repair → verify → ✅ accepted
-python sv.py health                     # health score breakdown
-python sv.py dashboard                  # generates dashboard.html (open in browser)
+git clone https://github.com/Nikhil-sharma-c/scraper.git
+cd scraper
+python -m scrape_verse.server                 # control center → http://127.0.0.1:8765
+npm i -g @brightdata/cli && bdata login       # one-time Bright Data OAuth
 ```
 
-Optional cloud mode (real extraction via Bright Data Scraper Studio):
+Paste any public URL plus a plain-language request ("get product name and price
+from every listing") and hit **Start scraping** — the first run teaches Bright
+Data's AI the site (5–25 min), then each site gets its own health card and
+re-runs take seconds. Prefer the terminal?
 
 ```bash
-npm i -g @brightdata/cli && bdata login       # one-time OAuth
 python sv.py run --mode cloud                 # run pinned Collector c_mt39p31p2mji0agjy0
 python sv.py heal --mode auto                 # closed-loop healing against the live site
 ```
@@ -122,31 +116,11 @@ python sv.py heal --mode auto
 python sv.py history
 python sv.py events           # event log
 
-# 6. Guaranteed live demo (works offline)
-python tools/build_snapshots.py        # once; fetches real HN, derives drifted variants
-python sv.py demo hn_v1.html           # healthy baseline
-python sv.py demo hn_v2.html           # ⚠️ drift detected → doctor report
-python sv.py heal --mode 'demo:hn_v2.html->hn_v3.html'   # repair accepted (+health)
-python sv.py heal --mode 'demo:hn_v2.html->hn_v4_badrepair.html'  # ❌ rejected + rollback
-
-# 7. Static HTML dashboard
+# 6. Static HTML dashboard
 python sv.py dashboard                 # → dashboard.html
 ```
 
 Legacy entry points still work: `python validate.py hn_result.json`, `bash heal.sh`.
-
-## Demo story (10 steps)
-
-1. Natural-language request → Collector created
-2. Scrape data (cloud or local)
-3. "Website redesign" (replay `hn_v2.html`)
-4. Extraction silently breaks — `points 97%→0%, author 100%→3%`
-5. Scrape-Verse detects drift automatically
-6. Doctor diagnoses: selector/layout drift, confidence 94–98%, evidence listed
-7. Scoped heal prompt sent to Bright Data Collector
-8. Re-scrape after repair
-9. Verification: health must improve AND drift must clear
-10. Repair **accepted** (recorded as vX) or **rejected + rolled back**
 
 ## Architecture
 
@@ -180,13 +154,12 @@ Legacy entry points still work: `python validate.py hn_result.json`, `bash heal.
 
 | Path | Purpose |
 |------|---------|
-| `sv.py` | CLI: run/health/doctor/compare/heal/history/events/demo/dashboard |
+| `sv.py` | CLI: run/health/doctor/compare/heal/history/events/dashboard |
 | `scrape_verse/core.py` | profiling, drift detection, health score, doctor, version/event stores |
 | `scrape_verse/local_extract.py` | dependency-free HN extractor (dual-markup) |
 | `scrape_verse/healer.py` | closed-loop orchestration + accept/reject verification |
 | `scrape_verse/dashboard.py` | static dark-theme HTML dashboard generator |
-| `tools/build_snapshots.py` | builds demo snapshots from live HN (or synthetic fallback) |
-| `demo/hn_v1..v4*.html` | healthy page, redesigned page, partial fix, bad-repair page |
+| `demo/hn_v1..v4*.html` | healing-test HTML fixtures (offline repair-loop testing) |
 | `validate.py`, `heal.sh` | original hackathon entry points (still functional) |
 | `data/*.json` | run history, healing versions, event log |
 

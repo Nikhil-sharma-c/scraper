@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -77,20 +78,21 @@ def _preview(result_path: str, cap: int = 12) -> list[dict]:
         return []
 
 
-def _run_scrape_job(job_id: str, url: str, query: str, mode: str) -> None:
-    try:
-        # ---- demo replay path -------------------------------------------
-        if mode == "demo":
-            from .healer import run_demo
-            result_path = run_demo(url)
-            ctx = _evaluate(result_path, "hackernews", mode="demo",
-                            source=f"gui demo: {url}")
-            _set_job(job_id, status="done", run_id=ctx["run"]["id"],
-                     result_file=result_path,
-                     summary=f"{ctx['health']['overall']}% · {ctx['health']['status']}",
-                     drift=ctx["drift"], health=ctx["health"])
-            return
+def _register_dynamic_target(job_id: str, url: str, query: str, collector_id: str = "",
+                             state: str = "building") -> dict:
+    """One card per URL — register/update a dynamic target for the fleet view."""
+    from urllib.parse import urlparse as _up
+    host = (_up(url).netloc or url).replace("www.", "")[:28] or "job"
+    key = "site_" + uuid.uuid5(uuid.NAMESPACE_URL, url).hex[:8]
+    core.register_target(key, label=host, url=url,
+                         collector_id=collector_id, query=query)
+    core.set_target_state(key, state=state, job_id=job_id,
+                          error=None if state not in ("error",) else "")
+    return key
 
+
+def _run_scrape_job(job_id: str, url: str, query: str) -> None:
+    try:
         # ---- real cloud path: create -> run -> evaluate -------------------
         _set_job(job_id, status="creating", message="AI is building the collector…")
         proc = _run_bdata(["scraper", "create", url, query[:500],
@@ -98,7 +100,12 @@ def _run_scrape_job(job_id: str, url: str, query: str, mode: str) -> None:
                           timeout=CREATE_TIMEOUT)
         out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         if proc.returncode != 0:
-            _set_job(job_id, status="error", message=f"scraper create failed: {out[-400:]}")
+            tail = out[-400:] or "(no output)"
+            # Bright Data's builder failed for this site — surface it honestly.
+            m = re.search(r"c_[a-z0-9]+", out)
+            hint = f" Half-built collector {m.group(0)} — delete it in the dashboard." if m else ""
+            _set_job(job_id, status="error",
+                     message=f"scraper create failed:{hint} {tail[-300:]}")
             return
         collector_id = None
         for line in reversed(proc.stdout.strip().splitlines() or []):
@@ -115,28 +122,34 @@ def _run_scrape_job(job_id: str, url: str, query: str, mode: str) -> None:
             _set_job(job_id, status="error",
                      message=f"could not parse collector id; CLI said: {out[-200:]}")
             return
-        core.register_target(f"job_{job_id[:8]}", label=query[:40] or url,
-                             url=url, collector_id=collector_id, query=query)
-        _set_job(job_id, status="running",
+
+        target_key = _register_dynamic_target(job_id, url, query, collector_id,
+                                              state="running")
+        _set_job(job_id, status="running", target=target_key,
                  message=f"Collector {collector_id} ready — running…")
 
         out_path = os.path.join(core.DATA_DIR, f"jobs_{job_id}.json")
         proc = _run_bdata(["scraper", "run", collector_id, url,
                            "--json", "-o", out_path], timeout=900)
         if proc.returncode != 0:
+            core.set_target_state(target_key, state="error", job_id=job_id)
             _set_job(job_id, status="error",
                      message=f"scraper run failed: {((proc.stderr or '') + (proc.stdout or ''))[-400:]}")
             return
 
-        target_key = f"job_{job_id[:8]}"
         ctx = _evaluate(out_path, target_key, mode="cloud", source=f"gui job: {query[:80]}")
+        n = ctx["run"]["profile"]["n_records"]
+        core.set_target_state(target_key, state="ready" if n else "no_data",
+                              job_id=job_id, collector_id=collector_id)
         _set_job(job_id, status="done", run_id=ctx["run"]["id"], result_file=out_path,
                  collector_id=collector_id, target=target_key,
-                 summary=f"{ctx['health']['overall']}% · {ctx['health']['status']}",
+                 summary=(f"{ctx['health']['overall']}% · {ctx['health']['status']} · "
+                          f"{n} records"),
                  drift=ctx["drift"], health=ctx["health"],
                  preview=_preview(out_path))
         core.log_event("gui_scrape",
-                       f"GUI job done: {url} → {len(ctx['drift'])} drift findings",
+                       f"GUI job done: {url} → {n} records, "
+                       f"{len(ctx['drift'])} drift findings",
                        target=target_key)
     except Exception as exc:
         _set_job(job_id, status="error", message=f"{exc.__class__.__name__}: {exc}")
@@ -202,10 +215,11 @@ class Handler(BaseHTTPRequestHandler):
             out = []
             for key in core.all_target_keys():
                 t = core.get_target(key)
+                st = core.get_target_state(key)
                 h = core.health_for_target(key)
                 out.append({"key": key, "label": t["label"], "url": t["url"],
-                            "collector": t["collector"],
-                            "health": h})
+                            "collector": t["collector"], "state": st.get("state"),
+                            "error": st.get("error"), "health": h})
             return self._json({"targets": out})
 
         if route == "/api/health":
@@ -263,26 +277,17 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/scrape":
             url = (body.get("url") or "").strip()
             query = (body.get("query") or "").strip()
-            mode = (body.get("mode") or "cloud").strip()
-            if mode != "demo" and not url.startswith(("http://", "https://")):
+            if not url.startswith(("http://", "https://")):
                 return self._json({"error": "url must start with http(s)://"}, 400)
-            if mode != "demo" and not query:
+            if not query:
                 return self._json({"error": "query is required (what should be scraped?)"},
                                   400)
             job_id = uuid.uuid4().hex[:12]
+            # card appears immediately in the fleet view while building
+            _register_dynamic_target(job_id, url, query, state="building")
             _set_job(job_id, status="queued", message="queued")
             threading.Thread(target=_run_scrape_job,
-                             args=(job_id, url, query, mode), daemon=True).start()
-            return self._json({"job_id": job_id}, 202)
-
-        if route == "/api/demo":
-            snap = (body.get("snapshot") or "").strip()
-            if "/" in snap or "\\" in snap or ".." in snap or not snap.endswith(".html"):
-                return self._json({"error": "invalid snapshot name"}, 400)
-            job_id = uuid.uuid4().hex[:12]
-            _set_job(job_id, status="queued", message="queued")
-            threading.Thread(target=_run_scrape_job,
-                             args=(job_id, snap, "", "demo"), daemon=True).start()
+                             args=(job_id, url, query), daemon=True).start()
             return self._json({"job_id": job_id}, 202)
 
         return self._json({"error": "unknown route"}, 404)

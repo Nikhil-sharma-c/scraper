@@ -80,26 +80,14 @@
       <textarea id="query" placeholder="Get product name, price and rating from every listing"></textarea>
 
       <div class="modes">
-        <div class="mode sel" data-mode="cloud">☁️ Cloud collector<br><span class="tiny">Bright Data · real run</span></div>
-        <div class="mode" data-mode="demo">🎬 Demo replay<br><span class="tiny">bundled HN snapshots</span></div>
-      </div>
-
-      <div id="demoPick" style="display:none">
-        <label>Snapshot</label>
-        <select id="snapshot" style="width:100%;background:#0d1326;border:1px solid var(--line);
-                border-radius:9px;padding:9px;color:var(--txt)">
-          <option value="hn_v1.html">hn_v1.html — healthy page</option>
-          <option value="hn_v2.html">hn_v2.html — redesigned (drift)</option>
-          <option value="hn_v3.html">hn_v3.html — partial recovery</option>
-          <option value="hn_v4_badrepair.html">hn_v4_badrepair.html — broken titles</option>
-        </select>
+        <div class="mode sel" data-mode="cloud" style="cursor:default">☁️ Cloud collector<br><span class="tiny">Bright Data · real run</span></div>
       </div>
 
       <button class="go" id="go">Scrape it →</button>
       <p class="tiny muted" style="margin-bottom:0">
         Cloud mode asks Bright Data's AI to build a collector for the URL+query
         (first build can take 5–25 min), then runs and validates it through the
-        standard pipeline.</p>
+        standard pipeline. Every site gets its own health card below.</p>
       <div id="jobwrap" style="display:none;margin-top:14px">
         <h2 style="margin-top:2px">Job console</h2>
         <div id="joblog"></div>
@@ -134,22 +122,11 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let MODE = 'cloud';
-
-/* ---------- mode toggle ---------- */
-document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
-  document.querySelectorAll('.mode').forEach(m => m.classList.remove('sel'));
-  el.classList.add('sel'); MODE = el.dataset.mode;
-  $('#demoPick').style.display = MODE === 'demo' ? 'block' : 'none';
-});
 
 /* ---------- submit job ---------- */
 $('#go').onclick = async () => {
   const url = $('#url').value.trim(), query = $('#query').value.trim();
-  const payload = MODE === 'demo'
-      ? {mode:'demo', url:$('#snapshot').value, query:''}
-      : {mode:'cloud', url, query};
-  if (MODE !== 'demo' && (!/^https?:\/\//.test(url) || !query)) {
+  if (!/^https?:\/\//.test(url) || !query) {
     logLine('err', '✗ Need both an http(s) URL and a plain-language query.');
     return;
   }
@@ -158,10 +135,12 @@ $('#go').onclick = async () => {
   logLine('info', '▸ dispatching job…');
   try {
     const r = await fetch('/api/scrape', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, query})});
     const data = await r.json();
     if (!r.ok) { logLine('err','✗ '+data.error); done(); return; }
-    logLine('info', '▸ job '+data.job_id+' accepted'); poll(data.job_id);
+    logLine('info', '▸ job '+data.job_id+' accepted');
+    logLine('muted-note', '  a health card for this site appears below while it builds');
+    poll(data.job_id);
   } catch(e){ logLine('err','✗ '+e); done(); }
 };
 
@@ -190,8 +169,8 @@ function poll(id){
     }
     if (j.status === 'error'){
       clearInterval(t); done();
-      logLine('err','✗ '+j.status.toUpperCase()+': '+(j.message||'unknown error'));
-      logLine('muted-note','  (cloud jobs need bdata login + budget; demo replay always works)');
+      logLine('err','✗ ERROR: '+(j.message||'unknown error'));
+      logLine('muted-note','  (this site may block Bright Data\'s builder — try another URL, or use the CLI)');
     }
   }, 2000);
 }
@@ -232,20 +211,37 @@ async function renderResult(j){
 }
 
 /* ---------- panels ---------- */
+const STATE_CHIP = {
+  building:  ['BUILDING', '#818cf8'],
+  running:   ['RUNNING',  '#22d3ee'],
+  ready:     [null,       null],          // use health status instead
+  error:     ['ERROR',    '#f87171'],
+  no_data:   ['NO DATA',  '#fbbf24']
+};
 async function loadCards(){
   const d = await (await fetch('/api/targets')).json();
   $('#cards').innerHTML = d.targets.map(t => {
-    const h = t.health, st = h ? h.status : 'NONE';
-    const score = h ? h.overall : '—';
+    const h = t.health;
+    let st, score, chipLabel;
+    if (t.state && STATE_CHIP[t.state] && STATE_CHIP[t.state][0]){
+      [chipLabel, ] = STATE_CHIP[t.state];
+      st = t.state === 'error' ? 'BROKEN' : 'NONE';
+      score = '—';
+    } else if (h){
+      st = h.status; score = h.overall; chipLabel = st;
+    } else {
+      st = 'NONE'; score = '—'; chipLabel = 'NO RUNS';
+    }
+    const comps = h ? Object.entries(h.components).slice(0,5) : [];
     return `<div class="card">
       <div class="name">${esc(t.label)}
-        <span class="chip ${st}">${st}</span></div>
+        <span class="chip ${st}">${esc(chipLabel)}</span></div>
       <div class="score" style="color:${st==='HEALTHY'?'var(--grn)':st==='DEGRADED'?'#fbbf24':st==='BROKEN'?'#f87171':'var(--dim)'}">${typeof score==='number'?score+'%':score}</div>
-      ${h?Object.entries(h.components).slice(0,5).map(([k,v])=>
+      ${comps.map(([k,v])=>
         `<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:3px">
-           <span>${k.replace(/_/g,' ')}</span><b>${Math.round(v)}%</b></div>`).join(''):''}
+           <span>${k.replace(/_/g,' ')}</span><b>${Math.round(v)}%</b></div>`).join('')}
       <div class="bar"><i style="width:${typeof score==='number'?score:0}%"></i></div>
-      <div class="url">${esc(t.url||t.collector||t.key)}</div>
+      <div class="url">${esc(t.error || t.url || t.collector || t.key)}</div>
     </div>`;
   }).join('');
 }

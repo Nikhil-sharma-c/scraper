@@ -77,6 +77,22 @@ def register_target(key: str, label: str, url: str, collector_id: str = "",
     return entry
 
 
+TARGET_STATE_FILE = os.path.join(DATA_DIR, "target_state.json")
+
+
+def set_target_state(key: str, **fields) -> None:
+    """Track lifecycle state (building/running/ready/error/no_data) per target."""
+    states = _read_json(TARGET_STATE_FILE, {})
+    st = states.setdefault(key, {})
+    st.update(fields)
+    st["updated_at"] = utcnow()
+    _write_json(TARGET_STATE_FILE, states)
+
+
+def get_target_state(key: str) -> dict:
+    return _read_json(TARGET_STATE_FILE, {}).get(key, {})
+
+
 def all_target_keys() -> list[str]:
     return list(TARGETS.keys()) + [k for k in load_dynamic_targets()
                                    if k not in TARGETS]
@@ -123,14 +139,23 @@ def _get_nested(obj, path):
 # --------------------------------------------------------------------------
 
 def extract_records(raw: object, target: str = "hackernews") -> list:
-    """Pull the story records out of a collector payload shape."""
-    stories_path = TARGETS.get(target, TARGETS["hackernews"])["stories_path"]
+    """Pull the record list out of an arbitrary collector payload shape."""
+    stories_path = get_target(target)["stories_path"]
     if isinstance(raw, list) and raw and isinstance(raw[0], dict) and "stories" in raw[0]:
         return _get_nested(raw, stories_path)
     if isinstance(raw, dict) and "stories" in raw:
         return raw["stories"] or []
-    if isinstance(raw, list) and raw and isinstance(raw[0], dict) and "title" in raw[0]:
-        return raw  # already a flat record list (local extractor output)
+    if isinstance(raw, list):
+        return [r for r in raw if isinstance(r, dict)]      # flat record list
+    if isinstance(raw, dict):
+        for key in ("results", "data", "items", "rows", "records",
+                    "movies", "products", "posts", "listings"):
+            v = raw.get(key)
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                return v
+        for v in raw.values():                              # first dict-list anywhere
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                return v
     return []
 
 
@@ -141,18 +166,38 @@ def is_url_ok(value) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def _observed_fields(records: list) -> list[str]:
+    """Union of record keys, order-stable (arbitrary-site schemas)."""
+    names: list[str] = []
+    for rec in records:
+        if isinstance(rec, dict):
+            for k in rec.keys():
+                if not k.startswith("_") and k not in names:
+                    names.append(k)
+    return names[:12]
+
+
 def profile(records: list) -> dict:
     """Compute per-field completeness stats over a list of records."""
+    observed = _observed_fields(records)
+    if set(REQUIRED_FIELDS) & set(observed):
+        names = REQUIRED_FIELDS            # HN-schema family: judge all five
+    else:
+        names = observed                   # arbitrary site: judge its own fields
     fields = {}
-    for name in REQUIRED_FIELDS:
+    for name in names:
         total = valid = 0
         for rec in records:
             if not isinstance(rec, dict):
                 continue
             total += 1
             value = rec.get(name)
-            expected = FIELD_TYPES[name]
-            ok = isinstance(value, expected) and not (isinstance(value, str) and not value.strip())
+            expected = FIELD_TYPES.get(name)
+            if expected is not None:
+                ok = isinstance(value, expected) and not (isinstance(value, str) and not value.strip())
+            else:                          # unknown field: any non-empty scalar
+                ok = isinstance(value, (str, int, float, bool)) and \
+                     not (isinstance(value, str) and not value.strip())
             # job posts legitimately lack an author on HN
             if name == "author" and ("hiring" in str(rec.get("title", "")).lower()
                                      and (value is None or value == "")):
@@ -317,9 +362,16 @@ def health_score(run: dict, prev: dict | None = None) -> dict:
 
     field_completeness = round(_completeness(prof), 2)
 
-    expected = TARGETS.get(run.get("target"), TARGETS["hackernews"]).get("expected_records", 30)
+    trec = get_target(run.get("target", "hackernews")).get(
+        "expected_records",
+        TARGETS.get(run.get("target"), TARGETS["hackernews"]).get("expected_records", 30))
     n = prof.get("n_records", 0)
-    record_count = round(min(100.0, 100.0 * n / expected), 2) if expected else 100.0
+    if n == 0:
+        record_count = 0.0
+    elif prof.get("fields"):
+        record_count = 100.0          # arbitrary sites: no baseline to judge count
+    else:
+        record_count = round(min(100.0, 100.0 * n / trec), 2)
 
     url_validity = prof.get("url_valid_pct", 0.0)
 
@@ -356,7 +408,7 @@ def health_score(run: dict, prev: dict | None = None) -> dict:
 
 def health_for_target(target: str) -> dict | None:
     """Health of the most recent run for a target (vs its predecessor)."""
-    runs = get_history(target, limit=2)
+    runs = [r for r in get_history(target, limit=6) if r.get("mode") != "demo"]
     if not runs:
         return None
     prev = runs[0] if len(runs) > 1 else None

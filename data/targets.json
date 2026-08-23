@@ -1,0 +1,10 @@
+{
+  "site_4adc8de1": {
+    "label": "onlyflix.to",
+    "url": "https://onlyflix.to/",
+    "collector": "",
+    "expected_records": 30,
+    "query": "scrape all movie name, rating, casts and release date",
+    "registered_at": "2026-08-23T08:59:54Z"
+  }
+}

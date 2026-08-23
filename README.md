@@ -80,14 +80,12 @@ python -m scrape_verse.server
 # open http://127.0.0.1:8765
 ```
 
-Paste any public URL and a plain-language query such as:
-
-> Get product name, price and rating from every listing
-
-The GUI asks Bright Data Scraper Studio to create a collector, runs it, and
-shows the result preview, health score, schema drift, live event stream, and
-healing history. The **Demo replay** mode is offline and instant for testing
-with `hn_v1.html`–`hn_v4_badrepair.html`.
+Paste any public URL plus a plain-language query ("get product name and price
+from every listing") and Bright Data's AI builds a collector, runs it, and
+scores it through the standard pipeline. Each site gets its own health card
+with **View data** (filterable table, copy/download JSON) and **↻ Re-run**
+actions, plain-language status, a live progress stepper while jobs run, an
+activity feed, and the repair history.
 
 A native Electron shell is also included:
 

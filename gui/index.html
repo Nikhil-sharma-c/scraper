@@ -6,274 +6,557 @@
 <title>Scrape-Verse · Control Center</title>
 <style>
   :root{
-    --bg:#0b1020; --panel:#111827; --line:#1f2937; --txt:#e5e7eb;
-    --mut:#94a3b8; --dim:#6b7280; --cyan:#22d3ee; --grn:#34d399;
-    --yel:#d97706; --red:#dc2626; --acc:#818cf8;
+    --bg:#0a0e1a; --panel:#101627; --panel2:#0c1222; --line:#1d2740;
+    --txt:#e8edf7; --mut:#9aa7bd; --dim:#64748b;
+    --cyan:#22d3ee; --grn:#34d399; --yel:#fbbf24; --red:#f87171; --acc:#818cf8;
+    --ring:0 0 0 3px rgba(129,140,248,.35);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);
-       font-family:ui-sans-serif,system-ui,'Segoe UI',sans-serif;font-size:15px}
-  a{color:var(--cyan);text-decoration:none}
-  .wrap{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
-  h1{font-size:1.45rem;margin:0;display:flex;align-items:center;gap:.55rem}
-  h1 .sub{font-size:.72rem;color:var(--mut);font-weight:400;letter-spacing:.08em;text-transform:uppercase}
-  .grid{display:grid;grid-template-columns:minmax(340px,420px) 1fr;gap:18px;margin-top:22px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-  .panel h2{margin:0 0 12px;font-size:.95rem;color:var(--mut);font-weight:600;
-            text-transform:uppercase;letter-spacing:.06em}
-  label{display:block;font-size:.78rem;color:var(--mut);margin:12px 0 5px}
-  input[type=text],textarea{width:100%;background:#0d1326;border:1px solid var(--line);
-    border-radius:9px;padding:9px 11px;color:var(--txt);font-size:.9rem;outline:none}
-  input:focus,textarea:focus{border-color:var(--acc)}
-  textarea{resize:vertical;min-height:64px;font-family:inherit}
-  .modes{display:flex;gap:8px;margin-top:14px}
-  .mode{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 6px;text-align:center;
-        cursor:pointer;color:var(--mut);font-size:.82rem;user-select:none}
-  .mode.sel{border-color:var(--acc);color:var(--txt);background:#1a2140}
-  button.go{width:100%;margin-top:16px;padding:11px;border:0;border-radius:9px;cursor:pointer;
-    background:linear-gradient(90deg,#22d3ee,#34d399);color:#06121f;font-weight:700;font-size:.95rem}
+  html{scrollbar-color:#26314e var(--bg)}
+  body{margin:0;background:radial-gradient(1100px 500px at 85% -10%,#14203c 0%,var(--bg) 55%);
+       color:var(--txt);font-family:ui-sans-serif,system-ui,'Segoe UI',sans-serif;font-size:15px;line-height:1.45}
+  a{color:var(--cyan)}
+  button{font-family:inherit}
+  :focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 70px}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.5rem;margin:0;display:flex;align-items:center;gap:.6rem}
+  h1 .sub{font-size:.72rem;color:var(--mut);font-weight:500;letter-spacing:.09em;text-transform:uppercase;display:block;margin-top:2px}
+  .conn{font-size:.78rem;color:var(--mut);display:flex;align-items:center;gap:.45rem}
+  .dot{width:8px;height:8px;border-radius:99px;background:var(--grn);box-shadow:0 0 8px rgba(52,211,153,.7)}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:minmax(330px,400px) 1fr;gap:18px;margin-top:20px;align-items:start}
+  @media(max-width:940px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .panel h2{margin:0 0 10px;font-size:.8rem;color:var(--mut);font-weight:700;
+            text-transform:uppercase;letter-spacing:.08em}
+
+  /* ---------- new scrape form ---------- */
+  label{display:block;font-size:.83rem;color:var(--txt);font-weight:600;margin:13px 0 5px}
+  label .why{display:block;font-weight:400;color:var(--dim);font-size:.76rem;margin-top:1px}
+  input[type=text],textarea{width:100%;background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;color:var(--txt);font-size:.92rem;outline:none}
+  input:focus,textarea:focus{border-color:var(--acc);box-shadow:var(--ring)}
+  textarea{resize:vertical;min-height:66px}
+  .examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .ex{font-size:.73rem;color:var(--mut);background:var(--panel2);border:1px solid var(--line);
+      border-radius:99px;padding:3px 10px;cursor:pointer}
+  .ex:hover{color:var(--txt);border-color:#2c3a5e}
+  button.go{width:100%;margin-top:16px;padding:12px;border:0;border-radius:11px;cursor:pointer;
+    background:linear-gradient(90deg,#22d3ee,#34d399);color:#06121f;font-weight:800;font-size:.98rem}
+  button.go:hover:not(:disabled){filter:brightness(1.07)}
   button.go:disabled{opacity:.45;cursor:wait}
-  /* target cards */
-  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-  .card{background:#0d1326;border:1px solid var(--line);border-radius:12px;padding:13px 15px}
-  .card .name{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:.92rem}
-  .chip{font-size:.72rem;padding:2px 8px;border-radius:99px;font-weight:700}
-  .HEALTHY{background:rgba(52,211,153,.15);color:var(--grn)}
-  .DEGRADED{background:rgba(217,119,6,.18);color:#fbbf24}
-  .BROKEN{background:rgba(220,38,38,.18);color:#f87171}
-  .NONE{background:rgba(107,114,128,.18);color:var(--dim)}
-  .score{font-size:1.85rem;font-weight:800;margin-top:4px}
-  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:9px}
-  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--grn))}
-  .url{color:var(--dim);font-size:.74rem;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  /* job console */
-  #joblog{background:#0a0f1e;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
-          font-family:ui-monospace,Consolas,monospace;font-size:.8rem;line-height:1.65;
-          max-height:290px;overflow-y:auto;white-space:pre-wrap;color:#9fb0c8}
-  .ok{color:var(--grn)} .warn{color:#fbbf24} .err{color:#f87171} .info{color:var(--cyan)}
-  table{border-collapse:collapse;width:100%;font-size:.83rem;margin-top:8px}
-  th{color:var(--dim);text-align:left;font-weight:500;padding:5px 8px;border-bottom:1px solid var(--line)}
-  td{padding:6px 8px;border-bottom:1px solid rgba(31,41,55,.55);vertical-align:top}
-  td.mono{font-family:ui-monospace,monospace;color:var(--mut)}
-  .ev-run{color:var(--dim)} .ev-drift{color:#fbbf24} .ev-repair_accepted,.ev-heal_started{color:var(--grn)}
-  .ev-repair_rejected{color:#f87171} .ev-diagnosis{color:var(--acc)} .ev-gui_scrape{color:var(--cyan)}
-  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line);
-        border-top-color:var(--cyan);border-radius:50%;animation:r 0.8s linear infinite;vertical-align:-2px}
+  .fineprint{font-size:.75rem;color:var(--dim);margin:10px 0 0}
+
+  /* ---------- job progress ---------- */
+  #progressCard{display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+  ol.steps{list-style:none;margin:0;padding:0}
+  ol.steps li{position:relative;padding:0 0 18px 30px;font-size:.86rem;color:var(--dim)}
+  ol.steps li::before{content:'';position:absolute;left:0;top:1px;width:17px;height:17px;border-radius:99px;
+    border:2px solid var(--line);background:var(--panel2)}
+  ol.steps li::after{content:'';position:absolute;left:8px;top:21px;width:2px;height:14px;background:var(--line)}
+  ol.steps li:last-child{padding-bottom:2px}
+  ol.steps li:last-child::after{display:none}
+  ol.steps li.done{color:var(--txt)}
+  ol.steps li.done::before{background:var(--grn);border-color:var(--grn);
+    box-shadow:inset 0 0 0 3px var(--panel2)}
+  ol.steps li.active{color:var(--txt)}
+  ol.steps li.active::before{border-color:var(--cyan);border-top-color:transparent;
+    animation:r .8s linear infinite}
   @keyframes r{to{transform:rotate(360deg)}}
-  .muted{color:var(--mut)} .tiny{font-size:.75rem}
-  .preview td:first-child{max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .elapsed{float:right;font-size:.74rem;color:var(--dim);font-variant-numeric:tabular-nums}
+  #errBox{display:none;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);
+    border-radius:10px;padding:12px 14px;margin-top:10px;font-size:.86rem}
+  #errBox b{color:var(--red)}
+  #errBox ul{margin:7px 0 0;padding-left:18px;color:var(--mut)}
+  details.log{margin-top:10px}
+  details.log summary{cursor:pointer;font-size:.76rem;color:var(--dim)}
+  #joblog{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;
+    font-family:ui-monospace,Consolas,monospace;font-size:.74rem;line-height:1.6;max-height:170px;
+    overflow-y:auto;white-space:pre-wrap;color:#8fa1bd;margin-top:6px}
+  .ok{color:var(--grn)} .warn{color:var(--yel)} .err{color:var(--red)} .info{color:var(--cyan)}
+
+  /* ---------- fleet cards ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:12px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 15px;
+        display:flex;flex-direction:column;gap:8px}
+  .card .toprow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .card .name{font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip{font-size:.72rem;padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap}
+  .chip.HEALTHY,.chip.ready{background:rgba(52,211,153,.14);color:var(--grn)}
+  .chip.DEGRADED{background:rgba(251,191,36,.13);color:var(--yel)}
+  .chip.BROKEN,.chip.error{background:rgba(248,113,113,.13);color:var(--red)}
+  .chip.building{background:rgba(129,140,248,.15);color:var(--acc)}
+  .chip.running{background:rgba(34,211,238,.13);color:var(--cyan)}
+  .chip.no_data{background:rgba(251,191,36,.13);color:var(--yel)}
+  .chip.NONE{background:rgba(100,116,139,.16);color:var(--mut)}
+  .plain{font-size:.77rem;color:var(--mut)}
+  .score-row{display:flex;align-items:baseline;gap:8px;margin-top:2px}
+  .score{font-size:1.9rem;font-weight:800;line-height:1}
+  .score-lbl{font-size:.75rem;color:var(--dim)}
+  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--grn));
+         transition:width .6s ease}
+  .meta{display:flex;justify-content:space-between;font-size:.74rem;color:var(--dim)}
+  .actions{display:flex;gap:7px;margin-top:2px}
+  .btn{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:.78rem;
+       padding:7px 6px;border-radius:8px;cursor:pointer;font-weight:600}
+  .btn:hover{border-color:#33436b;background:#131c33}
+  .btn.primary{background:linear-gradient(90deg,rgba(34,211,238,.16),rgba(52,211,153,.16));
+               border-color:#22506a}
+  .btn:disabled{opacity:.45;cursor:wait}
+  .empty{color:var(--dim);font-size:.88rem;padding:14px 4px}
+
+  /* ---------- tables & timeline ---------- */
+  table{border-collapse:collapse;width:100%;font-size:.82rem;margin-top:6px}
+  th{color:var(--dim);text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid rgba(29,39,64,.55);vertical-align:top}
+  td.mono{font-family:ui-monospace,monospace;color:var(--mut);white-space:nowrap}
+  .ev-run td:nth-child(2){color:var(--dim)} .ev-drift td:nth-child(2){color:var(--yel)}
+  .ev-repair_accepted td:nth-child(2),.ev-heal_started td:nth-child(2){color:var(--grn)}
+  .ev-repair_rejected td:nth-child(2){color:var(--red)} .ev-diagnosis td:nth-child(2){color:var(--acc)}
+  .ev-gui_scrape td:nth-child(2){color:var(--cyan)}
+  .verdict{font-size:.98rem;margin:2px 0 10px}
+  .verdict b.health-good{color:var(--grn)} .verdict b.health-mid{color:var(--yel)} .verdict b.health-bad{color:var(--red)}
+  .driftbox{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.3);border-radius:10px;
+    padding:10px 13px;margin:8px 0;font-size:.86rem}
+  .driftbox div{margin:2px 0}
+  .comps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 18px;margin-top:6px}
+  .comp{font-size:.78rem}
+  .comp .row{display:flex;justify-content:space-between;color:var(--mut);margin-bottom:3px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media(max-width:940px){.two-col{grid-template-columns:1fr}}
+
+  /* ---------- modal ---------- */
+  #modal{display:none;position:fixed;inset:0;background:rgba(4,8,18,.72);z-index:50;
+         align-items:center;justify-content:center;padding:24px}
+  #modal.open{display:flex}
+  .sheet{background:var(--panel);border:1px solid #26314e;border-radius:16px;max-width:900px;
+         width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+  .sheet header{padding:15px 18px;border-bottom:1px solid var(--line);align-items:center}
+  .sheet h3{margin:0;font-size:1rem}
+  .sheet .q{font-size:.78rem;color:var(--mut);margin-top:2px;font-style:italic}
+  .sheet .tools{display:flex;gap:8px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--line)}
+  .sheet input[type=text]{max-width:280px;padding:7px 10px;font-size:.84rem}
+  .sheet .body{overflow:auto;padding:0 18px 16px}
+  .sheet footer{padding:10px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+  .xbtn{background:none;border:0;color:var(--mut);font-size:1.25rem;cursor:pointer;line-height:1}
+  .xbtn:hover{color:var(--txt)}
+
+  .muted{color:var(--mut)} .tiny{font-size:.75rem} .dim{color:var(--dim)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🪐 Scrape-Verse <span class="sub">control center</span></h1>
+
+  <header>
+    <h1>🪐 Scrape-Verse
+      <span><span class="sub">control center</span></span>
+    </h1>
+    <div class="conn"><span class="dot" aria-hidden="true"></span> engine online · Bright Data cloud</div>
+  </header>
 
   <div class="grid">
-    <!-- ============ LEFT: new scrape ============ -->
+    <!-- ============ LEFT: ask for data ============ -->
     <div class="panel">
       <h2>New scrape</h2>
-      <label>Target URL</label>
-      <input type="text" id="url" placeholder="https://example.com/products" spellcheck="false">
 
-      <label>What should be scraped? (plain language)</label>
-      <textarea id="query" placeholder="Get product name, price and rating from every listing"></textarea>
+      <label for="url">Which website?
+        <span class="why">Any public page — products, articles, listings…</span>
+      </label>
+      <input type="text" id="url" placeholder="https://example.com/products" spellcheck="false"
+             autocomplete="off">
 
-      <div class="modes">
-        <div class="mode sel" data-mode="cloud" style="cursor:default">☁️ Cloud collector<br><span class="tiny">Bright Data · real run</span></div>
+      <label for="query">What do you want from it?
+        <span class="why">Describe it like you'd ask a person.</span>
+      </label>
+      <textarea id="query" placeholder="Get the product name, price and rating from every listing"></textarea>
+      <div class="examples" aria-label="Example requests">
+        <button class="ex" type="button">movie name, rating, cast, release date</button>
+        <button class="ex" type="button">headline, points and author</button>
+        <button class="ex" type="button">product name and price</button>
       </div>
 
-      <button class="go" id="go">Scrape it →</button>
-      <p class="tiny muted" style="margin-bottom:0">
-        Cloud mode asks Bright Data's AI to build a collector for the URL+query
-        (first build can take 5–25 min), then runs and validates it through the
-        standard pipeline. Every site gets its own health card below.</p>
-      <div id="jobwrap" style="display:none;margin-top:14px">
-        <h2 style="margin-top:2px">Job console</h2>
-        <div id="joblog"></div>
+      <button class="go" id="go">Start scraping →</button>
+      <p class="fineprint">The first run teaches our AI the site (5–25 min). After that,
+        re-runs take seconds. Every site gets its own card on the right.</p>
+
+      <!-- live job progress -->
+      <div id="progressCard" aria-live="polite">
+        <h2 style="margin-bottom:6px">Progress</h2>
+        <ol class="steps" id="steps">
+          <li data-s="queued"><span class="elapsed"></span>Request sent</li>
+          <li data-s="creating">Teaching the AI this website<span class="elapsed"></span></li>
+          <li data-s="running">Extracting the data<span class="elapsed"></span></li>
+          <li data-s="done">Checking quality &amp; saving history</li>
+        </ol>
+        <div id="errBox"></div>
+        <details class="log"><summary>Technical details</summary>
+          <div id="joblog" role="log"></div>
+        </details>
       </div>
     </div>
 
-    <!-- ============ RIGHT: live view ============ -->
+    <!-- ============ RIGHT: fleet + results ============ -->
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="panel">
-        <h2>Scraper fleet health</h2>
-        <div class="cards" id="cards"><span class="muted tiny">loading…</span></div>
+        <h2>Your scrapers</h2>
+        <div class="cards" id="cards"><div class="empty">Loading…</div></div>
       </div>
 
       <div class="panel" id="resultPanel" style="display:none">
-        <h2>Last job result</h2>
+        <h2>Last run</h2>
         <div id="jobResult"></div>
       </div>
-
-      <div class="panel">
-        <h2>Event stream <span class="tiny" style="text-transform:none;letter-spacing:0">(live)</span></h2>
-        <table><tbody id="events"><tr><td class="muted tiny">loading…</td></tr></tbody></table>
-      </div>
-
-      <div class="panel">
-        <h2>Healing history</h2>
-        <table><thead><tr><th>v</th><th>when (UTC)</th><th>reason</th><th>health</th><th>verdict</th></tr></thead>
-        <tbody id="versions"><tr><td colspan="5" class="muted tiny">loading…</td></tr></tbody></table>
-      </div>
     </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h2>Activity</h2>
+      <table><tbody id="events"><tr><td class="muted tiny">Loading…</td></tr></tbody></table>
+    </div>
+    <div class="panel">
+      <h2>Repair history</h2>
+      <table><thead><tr><th>v</th><th>what changed</th><th>health</th><th>verdict</th></tr></thead>
+      <tbody id="versions"><tr><td colspan="4" class="muted tiny">No repairs yet — they'll appear here automatically.</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ data viewer modal ============ -->
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="sheet">
+    <header>
+      <div style="flex:1">
+        <h3 id="mTitle">Data</h3>
+        <div class="q" id="mQuery"></div>
+      </div>
+      <button class="xbtn" id="mClose" aria-label="Close">✕</button>
+    </header>
+    <div class="tools">
+      <input type="text" id="mSearch" placeholder="Filter rows…" autocomplete="off">
+      <span class="tiny dim" id="mCount"></span>
+      <span style="flex:1"></span>
+      <button class="btn" id="mCopy" style="flex:0 0 auto">Copy JSON</button>
+      <button class="btn" id="mDl" style="flex:0 0 auto">Download</button>
+    </div>
+    <div class="body"><table id="mTable"></table></div>
   </div>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-/* ---------- submit job ---------- */
+/* ---------- helpers ---------- */
+function ago(iso){
+  if (!iso) return '';
+  let ms = new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime();
+  if (isNaN(ms)) ms = new Date(iso.replace(' ', 'T') + 'Z').getTime();
+  if (isNaN(ms)) return '';
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + ' min ago';
+  if (s < 86400) return Math.floor(s/3600) + ' hr ago';
+  return Math.floor(s/86400) + ' d ago';
+}
+function noun(fields){
+  const f = Object.keys(fields||{}).join(',');
+  if (/movie/.test(f)) return ['movies','🎬'];
+  if (/price/.test(f)) return ['products','🛒'];
+  if (/points/.test(f)) return ['stories','📰'];
+  if (/founder|batch/.test(f)) return ['startups','🚀'];
+  return ['records','📊'];
+}
+function healthWord(st){
+  return {HEALTHY:['Healthy','Everything looks good'],
+          DEGRADED:['Needs attention','Some fields came back incomplete'],
+          BROKEN:['Broken','Extraction is failing on this site']}[st] || [st||'—',''];
+}
+
+/* ---------- submit ---------- */
+document.querySelectorAll('.ex').forEach(b => b.onclick = () => {
+  $('#query').value = 'scrape all ' + b.textContent;
+  $('#query').focus();
+});
+
 $('#go').onclick = async () => {
   const url = $('#url').value.trim(), query = $('#query').value.trim();
-  if (!/^https?:\/\//.test(url) || !query) {
-    logLine('err', '✗ Need both an http(s) URL and a plain-language query.');
+  if (!/^https?:\/\//.test(url) || !query){
+    showErr('Almost there', 'Add a full web address (starting with https://) and describe what you want in the box above.');
     return;
   }
-  $('#go').disabled = true; $('#jobwrap').style.display = 'block';
-  $('#joblog').textContent = ''; $('#resultPanel').style.display = 'none';
-  logLine('info', '▸ dispatching job…');
+  resetProgress();
   try {
     const r = await fetch('/api/scrape', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, query})});
     const data = await r.json();
-    if (!r.ok) { logLine('err','✗ '+data.error); done(); return; }
-    logLine('info', '▸ job '+data.job_id+' accepted');
-    logLine('muted-note', '  a health card for this site appears below while it builds');
-    poll(data.job_id);
-  } catch(e){ logLine('err','✗ '+e); done(); }
+    if (!r.ok){ showErr('Could not start', data.error || 'Unknown error'); return; }
+    logLine('info','▸ job '+data.job_id+' accepted');
+    startProgress(data.job_id);
+  } catch(e){ showErr('Network error', String(e)); }
 };
 
-function done(){ $('#go').disabled = false; }
-
-/* ---------- job polling ---------- */
-const STAGE_MSG = {
-  creating:'building collector (AI writes the scraper — 5–25 min first time)',
-  running:'collector ready — extracting records'
-};
-function poll(id){
-  const t = setInterval(async () => {
+/* ---------- job progress ---------- */
+let progTimer = null;
+function resetProgress(){
+  clearInterval(progTimer);
+  $('#progressCard').style.display = 'block';
+  $('#errBox').style.display = 'none';
+  $('#resultPanel').style.display = 'none';
+  $('#joblog').textContent = '';
+  document.querySelectorAll('#steps li').forEach(li =>
+    li.classList.remove('done','active'));
+}
+function setStage(status){
+  const order = ['queued','creating','running','done'];
+  const idx = order.indexOf(status === 'done' ? 'done' : status);
+  document.querySelectorAll('#steps li').forEach((li,i) => {
+    li.classList.toggle('done', i < idx || status === 'done');
+    li.classList.toggle('active', i === idx && status !== 'done');
+  });
+}
+function fmtElapsed(ms){
+  const s = Math.floor(ms/1000);
+  return s < 60 ? s+'s' : Math.floor(s/60)+'m '+(s%60)+'s';
+}
+function startProgress(id){
+  const t0 = Date.now();
+  setStage('queued');
+  let last = '';
+  progTimer = setInterval(async () => {
+    document.querySelectorAll('#steps li.active .elapsed,#steps li.done .elapsed')
+      .forEach(el => el instanceof HTMLElement && !el.closest('[data-s="queued"]') &&
+                     (el.textContent = fmtElapsed(Date.now()-t0)));
     let j;
     try { j = await (await fetch('/api/job/'+id)).json(); } catch(e){ return; }
-    if (STAGE_MSG[j.status]) logLine('info','⠋ '+(j.message||STAGE_MSG[j.status]));
+    if (j.status !== last){
+      last = j.status;
+      setStage(j.status);
+      if (j.status === 'running') logLine('info','▸ '+j.message);
+    }
     if (j.status === 'done'){
-      clearInterval(t); done();
+      clearInterval(progTimer);
       logLine('ok','✓ finished — '+j.summary);
-      if (j.drift && j.drift.length){
-        logLine('warn','⚠ schema drift detected:');
-        j.drift.forEach(d => logLine('warn',
-          `   ${d.field}: ${Math.round(d.prev_pct??0)}% → ${Math.round(d.new_pct??0)}% (${d.severity})`));
-      } else logLine('ok','✓ no schema drift');
-      renderResult(j);
-      refreshAll();
+      renderResult(j); refreshAll();
     }
     if (j.status === 'error'){
-      clearInterval(t); done();
-      logLine('err','✗ ERROR: '+(j.message||'unknown error'));
-      logLine('muted-note','  (this site may block Bright Data\'s builder — try another URL, or use the CLI)');
+      clearInterval(progTimer);
+      setStage('error');
+      logLine('err','✗ '+j.message);
+      const halfBuilt = (j.message.match(/c_[a-z0-9]+/) || [''])[0];
+      showErr("Couldn't finish this one",
+        halfBuilt ? 'The AI could not build a reliable scraper for this site — it may block automated access.'
+                  : (j.message || 'Unknown error'),
+        halfBuilt ? ['Try a simpler page from the same site',
+                     'Or a different site altogether — some sites block bots'] :
+                   ['Check the technical details below',
+                    'Re-check the URL works in your browser']);
     }
   }, 2000);
 }
+function showErr(title, msg, tips){
+  const box = $('#errBox');
+  box.style.display = 'block';
+  box.innerHTML = '<b>😕 '+esc(title)+'</b><br>'+esc(msg)+
+    (tips ? '<ul>'+tips.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>' : '');
+}
 
-/* ---------- result rendering ---------- */
-function esc(s){ return String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* ---------- result panel ---------- */
 async function renderResult(j){
   const h = j.health || {};
   const comps = h.components || {};
-  const bars = Object.entries(comps).map(([k,v]) =>
-    `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:.8rem">
-       <span style="width:150px;color:var(--mut)">${k.replace(/_/g,' ')}</span>
-       <div class="bar" style="flex:1;margin:0"><i style="width:${v}%"></i></div>
-       <b>${Math.round(v)}%</b></div>`).join('');
-  let preview = '';
-  if (j.preview && j.preview.length){
-    const cols = Object.keys(j.preview[0]).slice(0,5);
-    preview = '<table class="preview"><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+
-      j.preview.map(r=>'<tr>'+cols.map(c=>`<td>${esc(String(r[c]??'')).slice(0,60)}</td>`).join('')+'</tr>').join('')+
-      '</table>';
-  } else if (j.run_id){
-    try{
-      const d = await (await fetch('/api/result/'+j.run_id)).json();
-      const recs = (d.records||[]).slice(0,10);
-      if (recs.length){
-        const cols = Object.keys(recs[0]).slice(0,5);
-        preview = '<table class="preview"><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+
-          recs.map(r=>'<tr>'+cols.map(c=>`<td>${esc(String(r[c]??'')).slice(0,60)}</td>`).join('')+'</tr>').join('')+'</table>';
-      }
-    }catch(e){}
+  const cls = h.status==='HEALTHY'?'health-good':h.status==='DEGRADED'?'health-mid':'health-bad';
+  const [word] = healthWord(h.status);
+  let driftHtml = '';
+  if (j.drift && j.drift.length){
+    driftHtml = '<div class="driftbox"><b>⚠️ Changed since last time:</b>' +
+      j.drift.map(d => `<div>${esc(d.field)} dropped from ${Math.round(d.prev_pct??0)}% → ${Math.round(d.new_pct??0)}%</div>`).join('') +
+      '</div>';
+  } else {
+    driftHtml = '<p class="tiny dim" style="margin:4px 0 8px">✓ Nothing changed vs the previous run.</p>';
   }
+  const bars = Object.entries(comps).map(([k,v]) =>
+    `<div class="comp"><div class="row"><span>${esc(k.replace(/_/g,' '))}</span><b>${Math.round(v)}%</b></div>
+     <div class="bar"><i style="width:${v}%"></i></div></div>`).join('');
+
+  let preview = '';
+  try {
+    const d = await (await fetch('/api/result/'+j.run_id)).json();
+    const recs = (d.records||[]).slice(0,8);
+    if (recs.length){
+      const cols = Object.keys(recs[0]).slice(0,4);
+      preview = '<table class="preview"><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+
+        recs.map(r=>'<tr>'+cols.map(c=>`<td>${esc(String(r[c]??'')).slice(0,48)}</td>`).join('')+'</tr>').join('')+'</table>';
+    }
+  } catch(e){}
+
   $('#resultPanel').style.display = 'block';
-  $('#jobResult').innerHTML = `
-    <span class="chip ${h.status||'NONE'}">${h.status||'NO DATA'} ${h.overall??''}%</span>
-    ${bars}
-    ${j.collector_id?`<p class="tiny muted" style="margin:10px 0 0">collector pinned: <code>${esc(j.collector_id)}</code></p>`:''}
-    ${preview}`;
+  $('#jobResult').innerHTML =
+    `<div class="verdict">Scraped successfully — health is <b class="${cls}">${h.overall??'?'}% (${esc(word)})</b>.</div>
+     ${driftHtml}
+     <div class="comps">${bars}</div>
+     ${preview}`;
 }
 
-/* ---------- panels ---------- */
-const STATE_CHIP = {
-  building:  ['BUILDING', '#818cf8'],
-  running:   ['RUNNING',  '#22d3ee'],
-  ready:     [null,       null],          // use health status instead
-  error:     ['ERROR',    '#f87171'],
-  no_data:   ['NO DATA',  '#fbbf24']
-};
+/* ---------- fleet cards ---------- */
+const STATE_CHIP = {building:['building','⏳ Building'], running:['running','🔄 Checking'],
+  error:['error','🔴 Failed'], no_data:['no_data','🟡 No data']};
+let CARDS = [];
 async function loadCards(){
-  const d = await (await fetch('/api/targets')).json();
-  $('#cards').innerHTML = d.targets.map(t => {
+  let d;
+  try { d = await (await fetch('/api/targets')).json(); } catch(e){ return; }
+  CARDS = d.targets;
+  if (!CARDS.length){
+    $('#cards').innerHTML = '<div class="empty">No scrapers yet — paste a URL on the left to get started 🚀</div>';
+    return;
+  }
+  $('#cards').innerHTML = CARDS.map((t,i) => {
     const h = t.health;
-    let st, score, chipLabel;
-    if (t.state && STATE_CHIP[t.state] && STATE_CHIP[t.state][0]){
-      [chipLabel, ] = STATE_CHIP[t.state];
-      st = t.state === 'error' ? 'BROKEN' : 'NONE';
-      score = '—';
+    let chip, chipCls, plain, score = null, stCls = '';
+    if (t.state && STATE_CHIP[t.state]){
+      [chipCls, chip] = STATE_CHIP[t.state];
+      plain = t.state==='building' ? 'The AI is learning this site'
+            : t.state==='running' ? 'Fetching fresh data…'
+            : t.state==='error' ? (t.error ? String(t.error).slice(0,80) : 'Something went wrong')
+            : 'Ran fine but found nothing';
     } else if (h){
-      st = h.status; score = h.overall; chipLabel = st;
+      stCls = h.status;
+      [chip] = healthWord(h.status);
+      chip = (h.status==='HEALTHY'?'🟢 ':h.status==='DEGRADED'?'🟡 ':'🔴 ') + chip;
+      chipCls = h.status;
+      plain = healthWord(h.status)[1];
+      score = h.overall;
     } else {
-      st = 'NONE'; score = '—'; chipLabel = 'NO RUNS';
+      chip = '⚪ Not run yet'; chipCls = 'NONE'; plain = 'Waiting for its first run';
     }
-    const comps = h ? Object.entries(h.components).slice(0,5) : [];
-    return `<div class="card">
-      <div class="name">${esc(t.label)}
-        <span class="chip ${st}">${esc(chipLabel)}</span></div>
-      <div class="score" style="color:${st==='HEALTHY'?'var(--grn)':st==='DEGRADED'?'#fbbf24':st==='BROKEN'?'#f87171':'var(--dim)'}">${typeof score==='number'?score+'%':score}</div>
-      ${comps.map(([k,v])=>
-        `<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:3px">
-           <span>${k.replace(/_/g,' ')}</span><b>${Math.round(v)}%</b></div>`).join('')}
-      <div class="bar"><i style="width:${typeof score==='number'?score:0}%"></i></div>
-      <div class="url">${esc(t.error || t.url || t.collector || t.key)}</div>
+    const [n, icon] = noun(h?.components ? {} : {});
+    const recLine = t.last_run
+      ? `${icon} ${t.last_run.records} ${/\bmovie/.test(t.query)?'movies':nounFromQuery(t.query,n)} found`
+      : `${icon} no data yet`;
+    return `<div class="card" data-i="${i}">
+      <div class="toprow"><span class="name">${esc(t.label)}</span>
+        <span class="chip ${chipCls}">${esc(chip)}</span></div>
+      <div class="plain">${t.query ? '“'+esc(String(t.query).slice(0,70))+'”' : esc(plain)}</div>
+      ${score!=null ? `
+      <div class="score-row"><span class="score" style="color:${h.status==='HEALTHY'?'var(--grn)':h.status==='DEGRADED'?'var(--yel)':'var(--red)'}">${score}%</span>
+        <span class="score-lbl">health</span></div>
+      <div class="bar"><i style="width:${score}%"></i></div>` : ''}
+      <div class="meta"><span>${esc(recLine)}</span>
+        <span>${t.last_run ? '🕒 '+esc(ago(t.last_run.when)) : ''}</span></div>
+      <div class="actions">
+        ${t.last_run ? `<button class="btn primary" onclick="viewData('${esc(t.key)}')">View data</button>` : ''}
+        ${t.collector && t.collector.startsWith('c_') ? `<button class="btn" onclick="rerun('${esc(t.key)}',this)">↻ Re-run</button>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
+function nounFromQuery(q, fallback){
+  q = (q||'').toLowerCase();
+  if (/movie|film|series|show/.test(q)) return 'movies';
+  if (/product|item/.test(q)) return 'products';
+  if (/story|article|post|news/.test(q)) return 'articles';
+  return fallback;
+}
+async function rerun(key, btn){
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try {
+    const r = await fetch('/api/rerun', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({target:key})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'failed');
+    resetProgress();
+    logLine('info','▸ re-run started for '+key);
+    startProgress(d.job_id);
+  } catch(e){
+    btn.disabled = false; btn.textContent = '↻ Re-run';
+    showErr('Re-run failed', String(e.message || e));
+  }
+}
+
+/* ---------- data viewer ---------- */
+let MODAL_DATA = null;
+async function viewData(key){
+  try {
+    const d = await (await fetch('/api/data/'+key)).json();
+    if (d.error) throw new Error(d.error);
+    MODAL_DATA = d;
+    $('#mTitle').textContent = d.label + ' — latest data';
+    $('#mQuery').textContent = d.query ? ('“'+d.query+'”  ·  '+ago(d.when)+'  ·  '+d.records.length+' rows') : '';
+    $('#mSearch').value = '';
+    drawModal('');
+    $('#modal').classList.add('open');
+    $('#mClose').focus();
+  } catch(e){ showErr('No data yet', String(e.message || e)); }
+}
+function drawModal(filter){
+  const d = MODAL_DATA; if (!d) return;
+  const f = filter.toLowerCase();
+  const rows = d.records.filter(r =>
+    !f || JSON.stringify(r).toLowerCase().includes(f)).slice(0, 120);
+  $('#mCount').textContent = rows.length + ' of ' + d.records.length + ' rows';
+  if (!rows.length){
+    $('#mTable').innerHTML = '<tr><td class="muted">No matching rows.</td></tr>';
+    return;
+  }
+  const cols = [...new Set(rows.flatMap(r => Object.keys(r)))]
+    .filter(c => c !== 'input')            // drop Bright Data's echoed job params
+    .slice(0, 6);
+  $('#mTable').innerHTML = '<thead><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
+    rows.map(r=>'<tr>'+cols.map(c=>{
+      const v = r[c]; const s = v==null?'':(typeof v==='object'?JSON.stringify(v):String(v));
+      return `<td title="${esc(s.slice(0,300))}">${esc(s.slice(0,90))}</td>`;}).join('')+'</tr>').join('')+
+    '</tbody>';
+}
+$('#mSearch').addEventListener('input', e => drawModal(e.target.value));
+$('#mClose').onclick = () => { $('#modal').classList.remove('open'); };
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('open'); });
+$('#mCopy').onclick = () => navigator.clipboard.writeText(JSON.stringify(MODAL_DATA.records, null, 2));
+$('#mDl').onclick = () => {
+  const blob = new Blob([JSON.stringify(MODAL_DATA.records, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (MODAL_DATA.label || 'data').replace(/\W+/g,'_') + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* ---------- activity + repairs ---------- */
 async function loadEvents(){
-  const d = await (await fetch('/api/events?limit=18')).json();
+  let d;
+  try { d = await (await fetch('/api/events?limit=14')).json(); } catch(e){ return; }
   $('#events').innerHTML = d.events.slice().reverse().map(e => {
     const time = (e.ts||'').length >= 19 ? e.ts.slice(11,19) : e.ts;
     return `<tr class="ev-${esc(e.kind)}"><td class="mono">${esc(time)}</td>`+
-           `<td>${esc(e.kind)}</td><td>${esc(e.message)}</td></tr>`;
-  }).join('');
+           `<td>${esc(e.kind.replace(/_/g,' '))}</td><td>${esc(e.message)}</td></tr>`;
+  }).join('') || '<tr><td class="muted tiny">Nothing yet.</td></tr>';
 }
 async function loadVersions(){
-  const d = await (await fetch('/api/versions')).json();
+  let d;
+  try { d = await (await fetch('/api/versions')).json(); } catch(e){ return; }
   const rows = [];
-  Object.entries(d.versions).forEach(([cid, hist]) =>
-    hist.forEach(v => rows.push({cid, ...v})));
+  Object.entries(d.versions).forEach(([cid, hist]) => hist.forEach(v => rows.push(v)));
   rows.sort((a,b)=>String(b.timestamp).localeCompare(String(a.timestamp)));
   $('#versions').innerHTML = rows.length ? rows.map(v =>
-    `<tr><td class="mono">v${v.version}</td><td class="mono">${esc(v.timestamp)}</td>`+
-    `<td>${esc(v.reason).slice(0,70)}</td>`+
-    `<td>${v.health_before??'—'}% → ${v.health_after!=null?v.health_after+'%':'—'}</td>`+
-    `<td>${v.accepted?'<span class="ok">✅ accepted</span>':'<span class="err">❌ rejected</span>'}</td></tr>`
-  ).join('') : '<tr><td colspan="5" class="muted tiny">no repairs yet</td></tr>';
+    `<tr><td class="mono">v${v.version}</td>`+
+    `<td>${esc(v.reason).slice(0,64)}</td>`+
+    `<td class="mono">${v.health_before??'—'}% → ${v.health_after!=null?v.health_after+'%':'—'}</td>`+
+    `<td>${v.accepted?'<span class="ok">✅ kept</span>':'<span class="err">❌ rolled back</span>'}</td></tr>`
+  ).join('') : '<tr><td colspan="4" class="muted tiny">No repairs yet — healing history will appear here.</td></tr>';
 }
 function refreshAll(){ loadCards(); loadEvents(); loadVersions(); }
 
-/* ---------- job console ---------- */
+/* ---------- tech log ---------- */
 function logLine(cls, msg){
   const el = $('#joblog');
   el.innerHTML += `<span class="${cls.startsWith('muted')?'muted':cls}">${esc(msg)}</span>\n`;
   el.scrollTop = el.scrollHeight;
 }
+
 setInterval(loadEvents, 5000);
 setInterval(loadCards, 10000);
 refreshAll();

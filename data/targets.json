@@ -2,9 +2,9 @@
   "site_4adc8de1": {
     "label": "onlyflix.to",
     "url": "https://onlyflix.to/",
-    "collector": "",
+    "collector": "c_mt5ktfw426s2mzuvn2",
     "expected_records": 30,
     "query": "scrape all movie name, rating, casts and release date",
-    "registered_at": "2026-08-23T08:59:54Z"
+    "registered_at": "2026-08-23T09:03:13Z"
   }
 }

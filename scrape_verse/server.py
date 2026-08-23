@@ -10,9 +10,10 @@ Serves gui/index.html plus a JSON API over the engine:
     GET  /api/runs?limit=N       run history
     GET  /api/versions           healing version history (all collectors)
     GET  /api/result/<run_id>    records of a stored run
-    POST /api/scrape             {"url","query","mode"} -> {job_id}  (async)
+    POST /api/scrape             {"url","query"} -> {job_id}  (async)
     GET  /api/job/<id>           job status / result
-    POST /api/demo               {"snapshot":"hn_v2.html"} replay via pipeline
+    POST /api/rerun              {"target"} -> {job_id}  re-run pinned collector
+    GET  /api/data/<target>      records of the latest run for a target
 """
 from __future__ import annotations
 
@@ -63,11 +64,11 @@ def _evaluate(result_path: str, target_key: str, mode: str, source: str) -> dict
     return evaluate(result_path, target_key, mode=mode, source=source)
 
 
-def _preview(result_path: str, cap: int = 12) -> list[dict]:
+def _preview(result_path: str, target_key: str = "hackernews", cap: int = 12) -> list[dict]:
     try:
         with open(result_path, encoding="utf-8") as f:
             raw = json.load(f)
-        records = core.extract_records(raw, "hackernews")
+        records = core.extract_records(raw, target_key)
         flat = []
         for rec in records[:cap]:
             if isinstance(rec, dict):
@@ -146,10 +147,48 @@ def _run_scrape_job(job_id: str, url: str, query: str) -> None:
                  summary=(f"{ctx['health']['overall']}% · {ctx['health']['status']} · "
                           f"{n} records"),
                  drift=ctx["drift"], health=ctx["health"],
-                 preview=_preview(out_path))
+                 preview=_preview(out_path, target_key))
         core.log_event("gui_scrape",
                        f"GUI job done: {url} → {n} records, "
                        f"{len(ctx['drift'])} drift findings",
+                       target=target_key)
+    except Exception as exc:
+        _set_job(job_id, status="error", message=f"{exc.__class__.__name__}: {exc}")
+
+
+def _rerun_job(job_id: str, target_key: str) -> None:
+    """Re-run an existing pinned collector (no rebuild) and rescore."""
+    try:
+        t = core.get_target(target_key)
+        cid, url = t.get("collector", ""), t.get("url", "")
+        if not cid.startswith("c_"):
+            _set_job(job_id, status="error",
+                     message="this target has no cloud collector pinned yet")
+            return
+        core.set_target_state(target_key, state="running", job_id=job_id)
+        _set_job(job_id, status="running", target=target_key,
+                 message=f"Re-running collector {cid}…")
+        out_path = os.path.join(core.DATA_DIR, f"jobs_{job_id}.json")
+        proc = _run_bdata(["scraper", "run", cid, url, "--json", "-o", out_path],
+                          timeout=900)
+        if proc.returncode != 0:
+            core.set_target_state(target_key, state="error", job_id=job_id,
+                                  error=((proc.stderr or "") + (proc.stdout or ""))[-300:])
+            _set_job(job_id, status="error",
+                     message=f"scraper run failed: {((proc.stderr or '') + (proc.stdout or ''))[-400:]}")
+            return
+        ctx = _evaluate(out_path, target_key, mode="cloud", source="GUI re-run")
+        n = ctx["run"]["profile"]["n_records"]
+        core.set_target_state(target_key, state="ready" if n else "no_data",
+                              job_id=job_id, collector_id=cid)
+        _set_job(job_id, status="done", run_id=ctx["run"]["id"], result_file=out_path,
+                 collector_id=cid, target=target_key,
+                 summary=(f"{ctx['health']['overall']}% · {ctx['health']['status']} · "
+                          f"{n} records"),
+                 drift=ctx["drift"], health=ctx["health"],
+                 preview=_preview(out_path, target_key))
+        core.log_event("gui_scrape",
+                       f"GUI re-run: {url} → {n} records",
                        target=target_key)
     except Exception as exc:
         _set_job(job_id, status="error", message=f"{exc.__class__.__name__}: {exc}")
@@ -217,9 +256,19 @@ class Handler(BaseHTTPRequestHandler):
                 t = core.get_target(key)
                 st = core.get_target_state(key)
                 h = core.health_for_target(key)
-                out.append({"key": key, "label": t["label"], "url": t["url"],
-                            "collector": t["collector"], "state": st.get("state"),
-                            "error": st.get("error"), "health": h})
+                runs = [r for r in core.get_history(target=key, limit=2)
+                        if r.get("mode") != "demo"]
+                last = runs[0] if runs else None
+                out.append({
+                    "key": key, "label": t["label"], "url": t["url"],
+                    "collector": t["collector"], "state": st.get("state"),
+                    "error": st.get("error"), "health": h,
+                    "query": t.get("query", ""),
+                    "last_run": ({
+                        "id": last["id"], "when": last["timestamp"],
+                        "records": last["profile"]["n_records"],
+                    } if last else None),
+                })
             return self._json({"targets": out})
 
         if route == "/api/health":
@@ -263,6 +312,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"run_id": run_id,
                                "records": records[:MAX_RECORDS_IN_RESULT]})
 
+        m_data = route.startswith("/api/data/")
+        if m_data:
+            key = route[len("/api/data/"):]
+            runs = [r for r in core.get_history(target=key, limit=1)
+                    if r.get("mode") != "demo"]
+            if not runs:
+                return self._json({"error": "no completed runs for this target yet"}, 404)
+            run = core.load_run(runs[0]["id"])
+            if not run or not os.path.isfile(run.get("result_file", "")):
+                return self._json({"error": "result file missing"}, 404)
+            with open(run["result_file"], encoding="utf-8") as f:
+                raw = json.load(f)
+            t = core.get_target(key)
+            return self._json({
+                "target": key, "label": t["label"], "url": t["url"],
+                "query": t.get("query", ""),
+                "when": run["timestamp"],
+                "records": core.extract_records(raw, key)[:MAX_RECORDS_IN_RESULT],
+            })
+
         if route.startswith("/api/job/"):
             job = _get_job(route[len("/api/job/"):])
             return (self._json(job) if job else self._json({"error": "unknown job"}, 404))
@@ -288,6 +357,16 @@ class Handler(BaseHTTPRequestHandler):
             _set_job(job_id, status="queued", message="queued")
             threading.Thread(target=_run_scrape_job,
                              args=(job_id, url, query), daemon=True).start()
+            return self._json({"job_id": job_id}, 202)
+
+        if route == "/api/rerun":
+            key = (body.get("target") or "").strip()
+            if not core.get_target(key):
+                return self._json({"error": "unknown target"}, 404)
+            job_id = uuid.uuid4().hex[:12]
+            _set_job(job_id, status="queued", message="queued", target=key)
+            threading.Thread(target=_rerun_job, args=(job_id, key),
+                             daemon=True).start()
             return self._json({"job_id": job_id}, 202)
 
         return self._json({"error": "unknown route"}, 404)

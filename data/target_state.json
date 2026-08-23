@@ -1,8 +1,9 @@
 {
   "site_4adc8de1": {
-    "state": "building",
+    "state": "ready",
     "job_id": "67e5f75b932e",
     "error": null,
-    "updated_at": "2026-08-23T08:59:54Z"
+    "updated_at": "2026-08-23T09:03:34Z",
+    "collector_id": "c_mt5ktfw426s2mzuvn2"
   }
 }

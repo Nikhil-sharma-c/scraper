@@ -23,3 +23,6 @@ video_kit/frames/
 video_kit/frames.txt
 video_kit/*.mp4
 .video-backup/
+
+# video production kit — local only, never published
+video_kit/

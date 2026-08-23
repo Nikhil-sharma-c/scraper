@@ -37,6 +37,50 @@ FIELD_TYPES = {"title": str, "url": str, "points": int, "author": str, "comment_
 DRIFT_THRESHOLD = 0.10   # a field dropping more than this share triggers drift
 COUNT_TOLERANCE = 0.25   # record count may vary 25% before flagging
 
+# --------------------------------------------------------------------------
+# dynamic targets (registered at runtime via GUI/API jobs)
+# --------------------------------------------------------------------------
+
+DYNAMIC_TARGETS_FILE = os.path.join(DATA_DIR, "targets.json")
+
+
+def load_dynamic_targets() -> dict:
+    return _read_json(DYNAMIC_TARGETS_FILE, {})
+
+
+def get_target(key: str) -> dict:
+    """Unified target lookup: built-in or dynamically registered."""
+    raw = TARGETS.get(key) or load_dynamic_targets().get(key) or {}
+    t = dict(raw)
+    t.setdefault("key", key)
+    t.setdefault("label", key.replace("_", " ").title())
+    t.setdefault("url", "")
+    t.setdefault("collector", "")
+    t.setdefault("stories_path", [0, "stories"])
+    t.setdefault("expected_records", 30)
+    return t
+
+
+def register_target(key: str, label: str, url: str, collector_id: str = "",
+                    expected_records: int | None = None, query: str = "") -> dict:
+    dyn = load_dynamic_targets()
+    entry = {
+        "label": label or key,
+        "url": url,
+        "collector": collector_id,
+        "expected_records": expected_records or 30,
+        "query": query,
+        "registered_at": utcnow(),
+    }
+    dyn[key] = entry
+    _write_json(DYNAMIC_TARGETS_FILE, dyn)
+    return entry
+
+
+def all_target_keys() -> list[str]:
+    return list(TARGETS.keys()) + [k for k in load_dynamic_targets()
+                                   if k not in TARGETS]
+
 
 # --------------------------------------------------------------------------
 # small utils

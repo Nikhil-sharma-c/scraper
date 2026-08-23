@@ -32,3 +32,10 @@ python sv.py heal --mode auto          # full loop: diagnose -> heal -> re-run -
 - Demo/offline work uses snapshot replay: `python sv.py demo hn_v2.html`.
   Quote mode strings containing `->` in shells.
 - Public data only; never commit tokens or `.env`.
+- GUI/API: `python -m scrape_verse.server` serves `gui/index.html` at localhost:8765.
+  POST `/api/scrape` accepts `{url, query, mode}` and runs asynchronously; every
+  completed job must still pass through `healer.evaluate()`.
+- GUI cloud jobs create a fresh Collector for each URL/query. Keep the returned
+  `collector_id` in the job result and never expose credentials to browser JS.
+- Electron is only a native shell around the Python server; do not duplicate
+  scraping logic in Node.

@@ -1,0 +1,301 @@
+"""Scrape-Verse local web GUI + JSON API (stdlib only).
+
+    python -m scrape_verse.server            # http://127.0.0.1:8765
+
+Serves gui/index.html plus a JSON API over the engine:
+
+    GET  /api/targets            registered targets + latest health each
+    GET  /api/health?target=X    health of the latest run for X
+    GET  /api/events?limit=N     recent event log
+    GET  /api/runs?limit=N       run history
+    GET  /api/versions           healing version history (all collectors)
+    GET  /api/result/<run_id>    records of a stored run
+    POST /api/scrape             {"url","query","mode"} -> {job_id}  (async)
+    GET  /api/job/<id>           job status / result
+    POST /api/demo               {"snapshot":"hn_v2.html"} replay via pipeline
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+from . import core
+
+GUI_DIR = os.path.join(core.ROOT, "gui")
+PORT = int(os.environ.get("SV_PORT", "8765"))
+CREATE_TIMEOUT = 60 * 45          # scraper create can take 5–25+ min
+MAX_RECORDS_IN_RESULT = 500
+
+# --------------------------------------------------------------------------
+# async job manager — arbitrary sites go through `bdata scraper create`
+# --------------------------------------------------------------------------
+
+_JOBS: dict[str, dict] = {}
+_JOBS_LOCK = threading.Lock()
+
+
+def _get_job(job_id: str) -> dict | None:
+    with _JOBS_LOCK:
+        return _JOBS.get(job_id)
+
+
+def _set_job(job_id: str, **fields):
+    with _JOBS_LOCK:
+        _JOBS.setdefault(job_id, {}).update(fields)
+
+
+def _run_bdata(args: list, timeout: int):
+    from .healer import _find_bdata
+    import subprocess
+    return subprocess.run([_find_bdata(), *args],
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def _evaluate(result_path: str, target_key: str, mode: str, source: str) -> dict:
+    """Route through the standard pipeline so history/drift/health stay consistent."""
+    from .healer import evaluate
+    return evaluate(result_path, target_key, mode=mode, source=source)
+
+
+def _preview(result_path: str, cap: int = 12) -> list[dict]:
+    try:
+        with open(result_path, encoding="utf-8") as f:
+            raw = json.load(f)
+        records = core.extract_records(raw, "hackernews")
+        flat = []
+        for rec in records[:cap]:
+            if isinstance(rec, dict):
+                flat.append({k: (v if isinstance(v, (str, int, float)) else str(v))
+                             for k, v in rec.items()})
+        return flat
+    except Exception:
+        return []
+
+
+def _run_scrape_job(job_id: str, url: str, query: str, mode: str) -> None:
+    try:
+        # ---- demo replay path -------------------------------------------
+        if mode == "demo":
+            from .healer import run_demo
+            result_path = run_demo(url)
+            ctx = _evaluate(result_path, "hackernews", mode="demo",
+                            source=f"gui demo: {url}")
+            _set_job(job_id, status="done", run_id=ctx["run"]["id"],
+                     result_file=result_path,
+                     summary=f"{ctx['health']['overall']}% · {ctx['health']['status']}",
+                     drift=ctx["drift"], health=ctx["health"])
+            return
+
+        # ---- real cloud path: create -> run -> evaluate -------------------
+        _set_job(job_id, status="creating", message="AI is building the collector…")
+        proc = _run_bdata(["scraper", "create", url, query[:500],
+                           "--name", f"sv_{int(time.time())}", "--json"],
+                          timeout=CREATE_TIMEOUT)
+        out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        if proc.returncode != 0:
+            _set_job(job_id, status="error", message=f"scraper create failed: {out[-400:]}")
+            return
+        collector_id = None
+        for line in reversed(proc.stdout.strip().splitlines() or []):
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    info = json.loads(line)
+                    collector_id = info.get("collector_id") or info.get("id")
+                    if collector_id:
+                        break
+                except json.JSONDecodeError:
+                    continue
+        if not collector_id:
+            _set_job(job_id, status="error",
+                     message=f"could not parse collector id; CLI said: {out[-200:]}")
+            return
+        core.register_target(f"job_{job_id[:8]}", label=query[:40] or url,
+                             url=url, collector_id=collector_id, query=query)
+        _set_job(job_id, status="running",
+                 message=f"Collector {collector_id} ready — running…")
+
+        out_path = os.path.join(core.DATA_DIR, f"jobs_{job_id}.json")
+        proc = _run_bdata(["scraper", "run", collector_id, url,
+                           "--json", "-o", out_path], timeout=900)
+        if proc.returncode != 0:
+            _set_job(job_id, status="error",
+                     message=f"scraper run failed: {((proc.stderr or '') + (proc.stdout or ''))[-400:]}")
+            return
+
+        target_key = f"job_{job_id[:8]}"
+        ctx = _evaluate(out_path, target_key, mode="cloud", source=f"gui job: {query[:80]}")
+        _set_job(job_id, status="done", run_id=ctx["run"]["id"], result_file=out_path,
+                 collector_id=collector_id, target=target_key,
+                 summary=f"{ctx['health']['overall']}% · {ctx['health']['status']}",
+                 drift=ctx["drift"], health=ctx["health"],
+                 preview=_preview(out_path))
+        core.log_event("gui_scrape",
+                       f"GUI job done: {url} → {len(ctx['drift'])} drift findings",
+                       target=target_key)
+    except Exception as exc:
+        _set_job(job_id, status="error", message=f"{exc.__class__.__name__}: {exc}")
+
+
+# --------------------------------------------------------------------------
+# HTTP layer
+# --------------------------------------------------------------------------
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "ScrapeVerse/0.3"
+
+    # -- helpers ----------------------------------------------------------
+    def _json(self, obj, code: int = 200):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _file(self, rel_path: str):
+        path = os.path.normpath(os.path.join(GUI_DIR, rel_path))
+        if not path.startswith(GUI_DIR) or not os.path.isfile(path):
+            self._json({"error": "not found"}, 404)
+            return
+        ctype = {".html": "text/html", ".js": "text/javascript",
+                 ".css": "text/css", ".svg": "image/svg+xml"}.get(
+                     os.path.splitext(path)[1], "application/octet-stream")
+        with open(path, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _body(self) -> dict:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > 1_000_000:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode())
+        except json.JSONDecodeError:
+            return {}
+
+    def log_message(self, fmt, *args):   # quiet
+        pass
+
+    # -- GET ---------------------------------------------------------------
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        route = parsed.path
+        qs = parse_qs(parsed.query)
+
+        if route in ("/", "/index.html"):
+            return self._file("index.html")
+        if route.startswith("/static/"):
+            return self._file(route[len("/static/"):])
+
+        if route == "/api/targets":
+            out = []
+            for key in core.all_target_keys():
+                t = core.get_target(key)
+                h = core.health_for_target(key)
+                out.append({"key": key, "label": t["label"], "url": t["url"],
+                            "collector": t["collector"],
+                            "health": h})
+            return self._json({"targets": out})
+
+        if route == "/api/health":
+            key = (qs.get("target") or ["hackernews"])[0]
+            h = core.health_for_target(key)
+            return self._json({"target": key, "health": h})
+
+        if route == "/api/events":
+            limit = min(int((qs.get("limit") or ["25"])[0]), 200)
+            return self._json({"events": core.recent_events(limit)})
+
+        if route == "/api/runs":
+            limit = min(int((qs.get("limit") or ["20"])[0]), 100)
+            runs = []
+            for r in core.get_history(limit=limit):
+                prof = r["profile"]
+                runs.append({
+                    "id": r["id"], "timestamp": r["timestamp"],
+                    "target": r.get("target"), "mode": r.get("mode"),
+                    "source": r.get("source"),
+                    "n_records": prof["n_records"],
+                    "fields": {k: v["pct"] for k, v in prof["fields"].items()},
+                })
+            return self._json({"runs": runs})
+
+        if route == "/api/versions":
+            versions = {}
+            for cid, hist in core._read_json(core.VERSIONS_FILE, {}).items():
+                versions[cid] = hist
+            return self._json({"versions": versions})
+
+        m_result = route.startswith("/api/result/")
+        if m_result:
+            run_id = route[len("/api/result/"):]
+            run = core.load_run(run_id)
+            if not run or not os.path.isfile(run.get("result_file", "")):
+                return self._json({"error": "run or result file not found"}, 404)
+            with open(run["result_file"], encoding="utf-8") as f:
+                raw = json.load(f)
+            records = core.extract_records(raw, run.get("target", "hackernews"))
+            return self._json({"run_id": run_id,
+                               "records": records[:MAX_RECORDS_IN_RESULT]})
+
+        if route.startswith("/api/job/"):
+            job = _get_job(route[len("/api/job/"):])
+            return (self._json(job) if job else self._json({"error": "unknown job"}, 404))
+
+        return self._json({"error": "unknown route"}, 404)
+
+    # -- POST ---------------------------------------------------------------
+    def do_POST(self):
+        route = urlparse(self.path).path
+        body = self._body()
+
+        if route == "/api/scrape":
+            url = (body.get("url") or "").strip()
+            query = (body.get("query") or "").strip()
+            mode = (body.get("mode") or "cloud").strip()
+            if mode != "demo" and not url.startswith(("http://", "https://")):
+                return self._json({"error": "url must start with http(s)://"}, 400)
+            if mode != "demo" and not query:
+                return self._json({"error": "query is required (what should be scraped?)"},
+                                  400)
+            job_id = uuid.uuid4().hex[:12]
+            _set_job(job_id, status="queued", message="queued")
+            threading.Thread(target=_run_scrape_job,
+                             args=(job_id, url, query, mode), daemon=True).start()
+            return self._json({"job_id": job_id}, 202)
+
+        if route == "/api/demo":
+            snap = (body.get("snapshot") or "").strip()
+            if "/" in snap or "\\" in snap or ".." in snap or not snap.endswith(".html"):
+                return self._json({"error": "invalid snapshot name"}, 400)
+            job_id = uuid.uuid4().hex[:12]
+            _set_job(job_id, status="queued", message="queued")
+            threading.Thread(target=_run_scrape_job,
+                             args=(job_id, snap, "", "demo"), daemon=True).start()
+            return self._json({"job_id": job_id}, 202)
+
+        return self._json({"error": "unknown route"}, 404)
+
+
+def main():
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    print(f"Scrape-Verse GUI → http://127.0.0.1:{PORT}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

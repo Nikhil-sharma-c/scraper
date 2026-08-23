@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scrape-Verse · Control Center</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#111827; --line:#1f2937; --txt:#e5e7eb;
+    --mut:#94a3b8; --dim:#6b7280; --cyan:#22d3ee; --grn:#34d399;
+    --yel:#d97706; --red:#dc2626; --acc:#818cf8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:ui-sans-serif,system-ui,'Segoe UI',sans-serif;font-size:15px}
+  a{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+  h1{font-size:1.45rem;margin:0;display:flex;align-items:center;gap:.55rem}
+  h1 .sub{font-size:.72rem;color:var(--mut);font-weight:400;letter-spacing:.08em;text-transform:uppercase}
+  .grid{display:grid;grid-template-columns:minmax(340px,420px) 1fr;gap:18px;margin-top:22px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .panel h2{margin:0 0 12px;font-size:.95rem;color:var(--mut);font-weight:600;
+            text-transform:uppercase;letter-spacing:.06em}
+  label{display:block;font-size:.78rem;color:var(--mut);margin:12px 0 5px}
+  input[type=text],textarea{width:100%;background:#0d1326;border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;color:var(--txt);font-size:.9rem;outline:none}
+  input:focus,textarea:focus{border-color:var(--acc)}
+  textarea{resize:vertical;min-height:64px;font-family:inherit}
+  .modes{display:flex;gap:8px;margin-top:14px}
+  .mode{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 6px;text-align:center;
+        cursor:pointer;color:var(--mut);font-size:.82rem;user-select:none}
+  .mode.sel{border-color:var(--acc);color:var(--txt);background:#1a2140}
+  button.go{width:100%;margin-top:16px;padding:11px;border:0;border-radius:9px;cursor:pointer;
+    background:linear-gradient(90deg,#22d3ee,#34d399);color:#06121f;font-weight:700;font-size:.95rem}
+  button.go:disabled{opacity:.45;cursor:wait}
+  /* target cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .card{background:#0d1326;border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .card .name{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:.92rem}
+  .chip{font-size:.72rem;padding:2px 8px;border-radius:99px;font-weight:700}
+  .HEALTHY{background:rgba(52,211,153,.15);color:var(--grn)}
+  .DEGRADED{background:rgba(217,119,6,.18);color:#fbbf24}
+  .BROKEN{background:rgba(220,38,38,.18);color:#f87171}
+  .NONE{background:rgba(107,114,128,.18);color:var(--dim)}
+  .score{font-size:1.85rem;font-weight:800;margin-top:4px}
+  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--grn))}
+  .url{color:var(--dim);font-size:.74rem;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* job console */
+  #joblog{background:#0a0f1e;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+          font-family:ui-monospace,Consolas,monospace;font-size:.8rem;line-height:1.65;
+          max-height:290px;overflow-y:auto;white-space:pre-wrap;color:#9fb0c8}
+  .ok{color:var(--grn)} .warn{color:#fbbf24} .err{color:#f87171} .info{color:var(--cyan)}
+  table{border-collapse:collapse;width:100%;font-size:.83rem;margin-top:8px}
+  th{color:var(--dim);text-align:left;font-weight:500;padding:5px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid rgba(31,41,55,.55);vertical-align:top}
+  td.mono{font-family:ui-monospace,monospace;color:var(--mut)}
+  .ev-run{color:var(--dim)} .ev-drift{color:#fbbf24} .ev-repair_accepted,.ev-heal_started{color:var(--grn)}
+  .ev-repair_rejected{color:#f87171} .ev-diagnosis{color:var(--acc)} .ev-gui_scrape{color:var(--cyan)}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line);
+        border-top-color:var(--cyan);border-radius:50%;animation:r 0.8s linear infinite;vertical-align:-2px}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .muted{color:var(--mut)} .tiny{font-size:.75rem}
+  .preview td:first-child{max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🪐 Scrape-Verse <span class="sub">control center</span></h1>
+
+  <div class="grid">
+    <!-- ============ LEFT: new scrape ============ -->
+    <div class="panel">
+      <h2>New scrape</h2>
+      <label>Target URL</label>
+      <input type="text" id="url" placeholder="https://example.com/products" spellcheck="false">
+
+      <label>What should be scraped? (plain language)</label>
+      <textarea id="query" placeholder="Get product name, price and rating from every listing"></textarea>
+
+      <div class="modes">
+        <div class="mode sel" data-mode="cloud">☁️ Cloud collector<br><span class="tiny">Bright Data · real run</span></div>
+        <div class="mode" data-mode="demo">🎬 Demo replay<br><span class="tiny">bundled HN snapshots</span></div>
+      </div>
+
+      <div id="demoPick" style="display:none">
+        <label>Snapshot</label>
+        <select id="snapshot" style="width:100%;background:#0d1326;border:1px solid var(--line);
+                border-radius:9px;padding:9px;color:var(--txt)">
+          <option value="hn_v1.html">hn_v1.html — healthy page</option>
+          <option value="hn_v2.html">hn_v2.html — redesigned (drift)</option>
+          <option value="hn_v3.html">hn_v3.html — partial recovery</option>
+          <option value="hn_v4_badrepair.html">hn_v4_badrepair.html — broken titles</option>
+        </select>
+      </div>
+
+      <button class="go" id="go">Scrape it →</button>
+      <p class="tiny muted" style="margin-bottom:0">
+        Cloud mode asks Bright Data's AI to build a collector for the URL+query
+        (first build can take 5–25 min), then runs and validates it through the
+        standard pipeline.</p>
+      <div id="jobwrap" style="display:none;margin-top:14px">
+        <h2 style="margin-top:2px">Job console</h2>
+        <div id="joblog"></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: live view ============ -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="panel">
+        <h2>Scraper fleet health</h2>
+        <div class="cards" id="cards"><span class="muted tiny">loading…</span></div>
+      </div>
+
+      <div class="panel" id="resultPanel" style="display:none">
+        <h2>Last job result</h2>
+        <div id="jobResult"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Event stream <span class="tiny" style="text-transform:none;letter-spacing:0">(live)</span></h2>
+        <table><tbody id="events"><tr><td class="muted tiny">loading…</td></tr></tbody></table>
+      </div>
+
+      <div class="panel">
+        <h2>Healing history</h2>
+        <table><thead><tr><th>v</th><th>when (UTC)</th><th>reason</th><th>health</th><th>verdict</th></tr></thead>
+        <tbody id="versions"><tr><td colspan="5" class="muted tiny">loading…</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let MODE = 'cloud';
+
+/* ---------- mode toggle ---------- */
+document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
+  document.querySelectorAll('.mode').forEach(m => m.classList.remove('sel'));
+  el.classList.add('sel'); MODE = el.dataset.mode;
+  $('#demoPick').style.display = MODE === 'demo' ? 'block' : 'none';
+});
+
+/* ---------- submit job ---------- */
+$('#go').onclick = async () => {
+  const url = $('#url').value.trim(), query = $('#query').value.trim();
+  const payload = MODE === 'demo'
+      ? {mode:'demo', url:$('#snapshot').value, query:''}
+      : {mode:'cloud', url, query};
+  if (MODE !== 'demo' && (!/^https?:\/\//.test(url) || !query)) {
+    logLine('err', '✗ Need both an http(s) URL and a plain-language query.');
+    return;
+  }
+  $('#go').disabled = true; $('#jobwrap').style.display = 'block';
+  $('#joblog').textContent = ''; $('#resultPanel').style.display = 'none';
+  logLine('info', '▸ dispatching job…');
+  try {
+    const r = await fetch('/api/scrape', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await r.json();
+    if (!r.ok) { logLine('err','✗ '+data.error); done(); return; }
+    logLine('info', '▸ job '+data.job_id+' accepted'); poll(data.job_id);
+  } catch(e){ logLine('err','✗ '+e); done(); }
+};
+
+function done(){ $('#go').disabled = false; }
+
+/* ---------- job polling ---------- */
+const STAGE_MSG = {
+  creating:'building collector (AI writes the scraper — 5–25 min first time)',
+  running:'collector ready — extracting records'
+};
+function poll(id){
+  const t = setInterval(async () => {
+    let j;
+    try { j = await (await fetch('/api/job/'+id)).json(); } catch(e){ return; }
+    if (STAGE_MSG[j.status]) logLine('info','⠋ '+(j.message||STAGE_MSG[j.status]));
+    if (j.status === 'done'){
+      clearInterval(t); done();
+      logLine('ok','✓ finished — '+j.summary);
+      if (j.drift && j.drift.length){
+        logLine('warn','⚠ schema drift detected:');
+        j.drift.forEach(d => logLine('warn',
+          `   ${d.field}: ${Math.round(d.prev_pct??0)}% → ${Math.round(d.new_pct??0)}% (${d.severity})`));
+      } else logLine('ok','✓ no schema drift');
+      renderResult(j);
+      refreshAll();
+    }
+    if (j.status === 'error'){
+      clearInterval(t); done();
+      logLine('err','✗ '+j.status.toUpperCase()+': '+(j.message||'unknown error'));
+      logLine('muted-note','  (cloud jobs need bdata login + budget; demo replay always works)');
+    }
+  }, 2000);
+}
+
+/* ---------- result rendering ---------- */
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function renderResult(j){
+  const h = j.health || {};
+  const comps = h.components || {};
+  const bars = Object.entries(comps).map(([k,v]) =>
+    `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:.8rem">
+       <span style="width:150px;color:var(--mut)">${k.replace(/_/g,' ')}</span>
+       <div class="bar" style="flex:1;margin:0"><i style="width:${v}%"></i></div>
+       <b>${Math.round(v)}%</b></div>`).join('');
+  let preview = '';
+  if (j.preview && j.preview.length){
+    const cols = Object.keys(j.preview[0]).slice(0,5);
+    preview = '<table class="preview"><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+
+      j.preview.map(r=>'<tr>'+cols.map(c=>`<td>${esc(String(r[c]??'')).slice(0,60)}</td>`).join('')+'</tr>').join('')+
+      '</table>';
+  } else if (j.run_id){
+    try{
+      const d = await (await fetch('/api/result/'+j.run_id)).json();
+      const recs = (d.records||[]).slice(0,10);
+      if (recs.length){
+        const cols = Object.keys(recs[0]).slice(0,5);
+        preview = '<table class="preview"><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr>'+
+          recs.map(r=>'<tr>'+cols.map(c=>`<td>${esc(String(r[c]??'')).slice(0,60)}</td>`).join('')+'</tr>').join('')+'</table>';
+      }
+    }catch(e){}
+  }
+  $('#resultPanel').style.display = 'block';
+  $('#jobResult').innerHTML = `
+    <span class="chip ${h.status||'NONE'}">${h.status||'NO DATA'} ${h.overall??''}%</span>
+    ${bars}
+    ${j.collector_id?`<p class="tiny muted" style="margin:10px 0 0">collector pinned: <code>${esc(j.collector_id)}</code></p>`:''}
+    ${preview}`;
+}
+
+/* ---------- panels ---------- */
+async function loadCards(){
+  const d = await (await fetch('/api/targets')).json();
+  $('#cards').innerHTML = d.targets.map(t => {
+    const h = t.health, st = h ? h.status : 'NONE';
+    const score = h ? h.overall : '—';
+    return `<div class="card">
+      <div class="name">${esc(t.label)}
+        <span class="chip ${st}">${st}</span></div>
+      <div class="score" style="color:${st==='HEALTHY'?'var(--grn)':st==='DEGRADED'?'#fbbf24':st==='BROKEN'?'#f87171':'var(--dim)'}">${typeof score==='number'?score+'%':score}</div>
+      ${h?Object.entries(h.components).slice(0,5).map(([k,v])=>
+        `<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:3px">
+           <span>${k.replace(/_/g,' ')}</span><b>${Math.round(v)}%</b></div>`).join(''):''}
+      <div class="bar"><i style="width:${typeof score==='number'?score:0}%"></i></div>
+      <div class="url">${esc(t.url||t.collector||t.key)}</div>
+    </div>`;
+  }).join('');
+}
+async function loadEvents(){
+  const d = await (await fetch('/api/events?limit=18')).json();
+  $('#events').innerHTML = d.events.slice().reverse().map(e => {
+    const time = (e.ts||'').length >= 19 ? e.ts.slice(11,19) : e.ts;
+    return `<tr class="ev-${esc(e.kind)}"><td class="mono">${esc(time)}</td>`+
+           `<td>${esc(e.kind)}</td><td>${esc(e.message)}</td></tr>`;
+  }).join('');
+}
+async function loadVersions(){
+  const d = await (await fetch('/api/versions')).json();
+  const rows = [];
+  Object.entries(d.versions).forEach(([cid, hist]) =>
+    hist.forEach(v => rows.push({cid, ...v})));
+  rows.sort((a,b)=>String(b.timestamp).localeCompare(String(a.timestamp)));
+  $('#versions').innerHTML = rows.length ? rows.map(v =>
+    `<tr><td class="mono">v${v.version}</td><td class="mono">${esc(v.timestamp)}</td>`+
+    `<td>${esc(v.reason).slice(0,70)}</td>`+
+    `<td>${v.health_before??'—'}% → ${v.health_after!=null?v.health_after+'%':'—'}</td>`+
+    `<td>${v.accepted?'<span class="ok">✅ accepted</span>':'<span class="err">❌ rejected</span>'}</td></tr>`
+  ).join('') : '<tr><td colspan="5" class="muted tiny">no repairs yet</td></tr>';
+}
+function refreshAll(){ loadCards(); loadEvents(); loadVersions(); }
+
+/* ---------- job console ---------- */
+function logLine(cls, msg){
+  const el = $('#joblog');
+  el.innerHTML += `<span class="${cls.startsWith('muted')?'muted':cls}">${esc(msg)}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+setInterval(loadEvents, 5000);
+setInterval(loadCards, 10000);
+refreshAll();
+</script>
+</body>
+</html>

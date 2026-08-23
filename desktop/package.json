@@ -1,0 +1,30 @@
+{
+  "name": "scrape-verse-desktop",
+  "productName": "Scrape-Verse",
+  "version": "0.3.0",
+  "description": "Desktop control center for the Scrape-Verse self-healing scraping agent",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "org.scrapeverse.desktop",
+    "files": ["main.js"],
+    "extraResources": [
+      { "from": "../scrape_verse", "to": "scrape_verse" },
+      { "from": "../gui", "to": "gui" },
+      { "from": "../data", "to": "data" },
+      { "from": "../demo", "to": "demo" }
+    ],
+    "win": { "signAndEditExecutable": false },
+    "portable": { "artifactName": "Scrape-Verse-Portable.exe" }
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}

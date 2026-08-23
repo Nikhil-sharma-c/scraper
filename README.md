@@ -71,6 +71,38 @@ python sv.py run --mode cloud                 # run pinned Collector c_mt39p31p2
 python sv.py heal --mode auto                 # closed-loop healing against the live site
 ```
 
+## GUI / desktop control center
+
+Prefer a graphical workflow? Start the local GUI:
+
+```bash
+python -m scrape_verse.server
+# open http://127.0.0.1:8765
+```
+
+Paste any public URL and a plain-language query such as:
+
+> Get product name, price and rating from every listing
+
+The GUI asks Bright Data Scraper Studio to create a collector, runs it, and
+shows the result preview, health score, schema drift, live event stream, and
+healing history. The **Demo replay** mode is offline and instant for testing
+with `hn_v1.html`–`hn_v4_badrepair.html`.
+
+A native Electron shell is also included:
+
+```bash
+cd desktop
+npm install
+npm start
+# package a portable Windows build:
+npm run dist
+```
+
+The Electron app starts the same Python API server and opens the GUI in a
+native desktop window. No credentials are stored by the GUI; Bright Data
+authentication remains in the normal CLI credential store.
+
 ## Full CLI tour
 
 ```bash

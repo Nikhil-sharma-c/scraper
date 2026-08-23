@@ -14,3 +14,12 @@ data/targets.json
 data/target_state.json
 data/jobs_*.json
 data/*_result.json
+
+# generated local runtime and video render artifacts
+data/
+video_kit/data/
+video_kit/assets/
+video_kit/frames/
+video_kit/frames.txt
+video_kit/*.mp4
+.video-backup/

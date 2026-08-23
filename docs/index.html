@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scrape-Verse — web scraping that heals itself</title>
+<meta name="description" content="Paste any URL, ask in plain English, get structured data — with a doctor that detects schema drift, repairs the scraper, and rolls back bad fixes automatically. Built on Bright Data Scraper Studio.">
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a30; --edge:#232f52; --ink:#e8edf9;
+    --mut:#93a0c2; --dim:#5d6a8c;
+    --cy:#22d3ee; --gr:#34d399; --am:#fbbf24; --rd:#f87171; --ac:#818cf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:
+      radial-gradient(900px 500px at 80% -10%, rgba(34,211,238,.09), transparent),
+      radial-gradient(800px 500px at 10% 110%, rgba(129,140,248,.08), transparent),
+      var(--bg);
+    color:var(--ink); line-height:1.6;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+  a{color:var(--cy);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:9;background:rgba(11,16,32,.85);backdrop-filter:blur(8px);
+      border-bottom:1px solid var(--edge)}
+  nav .wrap{display:flex;align-items:center;gap:14px;height:58px}
+  .logo{font-weight:800;font-size:1.05rem;color:var(--ink)}
+  .logo span{color:var(--cy)}
+  nav .sp{flex:1}
+  .navbtn{font-size:.85rem;font-weight:700;padding:7px 14px;border-radius:9px;
+          border:1px solid var(--edge);color:var(--ink)}
+  .navbtn:hover{border-color:var(--cy);text-decoration:none}
+  .navbtn.pri{background:linear-gradient(90deg,var(--cy),var(--gr));color:#06121f;border:0}
+
+  /* hero */
+  header{padding:84px 0 56px;text-align:center}
+  .pill{display:inline-block;font-size:.78rem;font-weight:700;letter-spacing:.06em;
+        color:var(--cy);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35);
+        border-radius:99px;padding:4px 14px;margin-bottom:22px}
+  h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;font-weight:850;letter-spacing:-.02em}
+  h1 em{font-style:normal;background:linear-gradient(90deg,var(--cy),var(--gr));
+        -webkit-background-clip:text;background-clip:text;color:transparent}
+  header p.sub{max-width:640px;margin:18px auto 0;color:var(--mut);font-size:1.05rem}
+  .cta{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{font-weight:800;padding:12px 22px;border-radius:12px;font-size:.95rem}
+  .btn:hover{text-decoration:none;filter:brightness(1.08)}
+  .btn.pri{background:linear-gradient(90deg,var(--cy),var(--gr));color:#06121f}
+  .btn.sec{border:1px solid var(--edge);color:var(--ink)}
+
+  /* stats strip */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;
+         margin:-26px auto 0;max-width:900px}
+  .stat{background:var(--panel);border:1px solid var(--edge);border-radius:14px;
+        padding:14px 10px;text-align:center}
+  .stat b{display:block;font-size:1.45rem;color:var(--gr)}
+  .stat span{font-size:.76rem;color:var(--mut)}
+
+  section{padding:64px 0}
+  h2{font-size:1.6rem;font-weight:800;letter-spacing:-.01em;margin-bottom:8px}
+  .lead{color:var(--mut);max-width:680px;margin-bottom:34px}
+
+  /* how it works loop */
+  .loop{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .step{background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:20px}
+  .step .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+           font-weight:800;font-size:.85rem;background:rgba(34,211,238,.12);
+           color:var(--cy);margin-bottom:12px}
+  .step h3{font-size:.98rem;margin-bottom:6px}
+  .step p{font-size:.86rem;color:var(--mut)}
+
+  /* result cards (mirror the GUI) */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:20px}
+  .card .toprow{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .card .name{font-weight:800}
+  .chip{font-size:.72rem;font-weight:800;padding:3px 10px;border-radius:99px;white-space:nowrap}
+  .chip.ok{background:rgba(52,211,153,.13);color:var(--gr)}
+  .chip.warn{background:rgba(251,191,36,.13);color:var(--am)}
+  .card .q{font-size:.82rem;color:var(--dim);font-style:italic;margin-bottom:14px;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .big{font-size:1.9rem;font-weight:850}
+  .card .cap{font-size:.78rem;color:var(--mut);margin-bottom:14px}
+  .bar{height:7px;border-radius:99px;background:#0c1326;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px}
+  .card ul{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:6px}
+  .card li{font-size:.82rem;color:var(--mut)}
+  .card li b{color:var(--ink)}
+
+  /* heal proof */
+  .proof{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+  .verdict{border-radius:16px;padding:22px;border:1px solid var(--edge);background:var(--panel)}
+  .verdict.good{border-color:rgba(52,211,153,.4)}
+  .verdict.bad{border-color:rgba(248,113,113,.4)}
+  .verdict .vtag{font-weight:800;font-size:.8rem;letter-spacing:.04em}
+  .good .vtag{color:var(--gr)} .bad .vtag{color:var(--rd)}
+  .verdict h3{margin:8px 0 4px;font-size:1.02rem}
+  .verdict .delta{font-size:.88rem;color:var(--mut)}
+  .verdict .delta b{color:var(--ink)}
+
+  /* architecture */
+  .arch{display:grid;grid-template-columns:1fr 60px 1fr;align-items:stretch;gap:0;max-width:820px;margin:0 auto}
+  @media(max-width:720px){.arch{grid-template-columns:1fr}.arrow{transform:rotate(90deg);height:44px}}
+  .box{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:22px}
+  .box h3{font-size:1rem;margin-bottom:12px}
+  .box.local h3{color:var(--cy)} .box.cloud h3{color:var(--ac)}
+  .box ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .box li{font-size:.86rem;color:var(--mut);padding-left:18px;position:relative}
+  .box li::before{content:"›";position:absolute;left:0;color:var(--dim);font-weight:800}
+  .arrow{display:grid;place-items:center;color:var(--dim);font-size:1.4rem;font-weight:800}
+
+  .chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:26px}
+  .tech{font-size:.8rem;font-weight:700;color:var(--mut);border:1px solid var(--edge);
+        border-radius:99px;padding:6px 14px}
+
+  footer{border-top:1px solid var(--edge);padding:30px 0 44px;text-align:center;
+         color:var(--dim);font-size:.83rem}
+  footer b{color:var(--mut)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="logo">🪐 Scrape<span>-Verse</span></span>
+    <span class="sp"></span>
+    <a class="navbtn" href="https://github.com/Nikhil-sharma-c/scraper">GitHub</a>
+    <a class="navbtn pri" href="#results">See the results</a>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <span class="pill">BUILT ON BRIGHT DATA SCRAPER STUDIO</span>
+    <h1>Web scraping that<br><em>heals itself.</em></h1>
+    <p class="sub">Paste any public URL, ask for what you want in plain English,
+       and get structured data — wrapped in a closed loop that detects when a
+       site breaks your scraper, diagnoses why, repairs it, and proves the fix.</p>
+    <div class="cta">
+      <a class="btn pri" href="https://github.com/Nikhil-sharma-c/scraper">View on GitHub</a>
+      <a class="btn sec" href="#how">How it works ↓</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>3</b><span>live sites scraped</span></div>
+      <div class="stat"><b>122</b><span>records extracted</span></div>
+      <div class="stat"><b>100%</b><span>top health score</span></div>
+      <div class="stat"><b>&lt;60s</b><span>re-run after heal</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <h2>The loop most scrapers don't have</h2>
+    <p class="lead">Scrapers don't crash when a site redesigns — they keep returning
+       200 OK with quietly broken data. Scrape-Verse assumes every run might be lying,
+       and checks.</p>
+    <div class="loop">
+      <div class="step"><div class="n">1</div><h3>Ask in plain English</h3>
+        <p>"Scrape all movie name, rating, cast and release date." No selectors, no code. Scraper Studio's AI builds and hosts the collector.</p></div>
+      <div class="step"><div class="n">2</div><h3>Run &amp; validate</h3>
+        <p>Every run is profiled against its own inferred schema — five quality components, from completeness to historical consistency.</p></div>
+      <div class="step"><div class="n">3</div><h3>Detect silent drift</h3>
+        <p>Points dropped 97% → 0%? Extraction "worked". The drift detector compares field coverage against run history and catches it.</p></div>
+      <div class="step"><div class="n">4</div><h3>Diagnose with evidence</h3>
+        <p>The Scraper Doctor names exactly which fields broke, which still work, and how confident it is — then writes a scoped repair prompt.</p></div>
+      <div class="step"><div class="n">5</div><h3>Heal &amp; verify</h3>
+        <p>Bright Data's healer rewrites the collector. Re-run, re-score: accepted only if health improves AND drift clears. Otherwise rolled back.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>Real results, three different schemas</h2>
+    <p class="lead">Each site below was scraped live during development through the
+       same pipeline — judged by its own inferred schema, not a hardcoded template.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="toprow"><span class="name">Hacker News</span><span class="chip ok">🟢 Healthy</span></div>
+        <div class="q">"headline, points and author"</div>
+        <div class="big">100%</div><div class="cap">health · 30 stories</div>
+        <div class="bar"><i style="width:100%;background:linear-gradient(90deg,#34d399,#22d3ee)"></i></div>
+        <ul><li>✓ healed live: author 3% → restored, verified as v3</li><li>✓ re-runs in seconds via pinned collector ID</li></ul>
+      </div>
+      <div class="card">
+        <div class="toprow"><span class="name">onlyflix.to</span><span class="chip warn">🟢 Healthy</span></div>
+        <div class="q">"movie name, rating, cast, release date"</div>
+        <div class="big">92%</div><div class="cap">health · 35 movies</div>
+        <div class="bar"><i style="width:92%;background:linear-gradient(90deg,#34d399,#22d3ee)"></i></div>
+        <ul><li>✓ arbitrary schema: name / cast / rating / release_date</li><li>✓ browsable records with filter, copy &amp; download JSON</li></ul>
+      </div>
+      <div class="card">
+        <div class="toprow"><span class="name">youtube.com</span><span class="chip ok">🟢 Healthy</span></div>
+        <div class="q">"channel title, thumbnail and views"</div>
+        <div class="big">100%</div><div class="cap">health · 57 videos</div>
+        <div class="bar"><i style="width:100%;background:linear-gradient(90deg,#34d399,#22d3ee)"></i></div>
+        <ul><li>✓ link fields validated generically across schemas</li><li>✓ own card, own state — never mixed with other sites</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="healing">
+  <div class="wrap">
+    <h2>It doesn't blindly trust the AI</h2>
+    <p class="lead">Every proposed repair must earn acceptance by measurably improving
+       health and clearing drift. These are both real outcomes from development:</p>
+    <div class="proof">
+      <div class="verdict good">
+        <span class="vtag">✅ REPAIR ACCEPTED</span>
+        <h3>Selector drift on Hacker News</h3>
+        <p class="delta">Health <b>84.3% → 92%</b>, drift cleared — kept as version 2,
+           then verified again post-heal at 100% as v3.</p>
+      </div>
+      <div class="verdict bad">
+        <span class="vtag">❌ REPAIR REJECTED</span>
+        <h3>A "fix" that made things worse</h3>
+        <p class="delta">Health <b>84.3% → 7.9%</b> — automatically rolled back to the
+           previous version. The audit trail keeps both attempts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <div class="wrap">
+    <h2>Thin local brain, heavy remote muscle</h2>
+    <p class="lead">Decisions, scoring, diagnosis and the audit trail stay in your repo.
+       The unpleasant parts of scraping happen on Bright Data's infrastructure.</p>
+    <div class="arch">
+      <div class="box local">
+        <h3>Your machine — the judge</h3>
+        <ul>
+          <li>Control center GUI (vanilla JS, zero build step)</li>
+          <li>Schema inference &amp; 5-component health scoring</li>
+          <li>Drift detection vs run history</li>
+          <li>Scraper Doctor diagnosis (pure statistics)</li>
+          <li>Accept / reject / rollback + version audit trail</li>
+        </ul>
+      </div>
+      <div class="arrow">⇄</div>
+      <div class="box cloud">
+        <h3>Bright Data — the muscle</h3>
+        <ul>
+          <li>AI builds collectors from plain-English requests</li>
+          <li>Proxy network &amp; unblocking fetches the pages</li>
+          <li>Hosted re-runs — seconds, not rebuilds</li>
+          <li>Healer applies scoped repair prompts</li>
+        </ul>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="tech">Python stdlib server</span>
+      <span class="tech">Bright Data Scraper Studio</span>
+      <span class="tech">bdata CLI</span>
+      <span class="tech">Vanilla JS GUI</span>
+      <span class="tech">Electron shell</span>
+      <span class="tech">JSON audit trail</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b>🪐 Scrape-Verse</b> — built for the WeMakeDevs × Bright Data hackathon.<br>
+    <a href="https://github.com/Nikhil-sharma-c/scraper">github.com/Nikhil-sharma-c/scraper</a>
+    · clone it, add your key, run <code style="color:var(--cy)">python -m scrape_verse.server</code>
+  </div>
+</footer>
+
+</body>
+</html>

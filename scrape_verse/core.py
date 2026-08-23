@@ -62,8 +62,7 @@ def get_target(key: str) -> dict:
 
 
 def register_target(key: str, label: str, url: str, collector_id: str = "",
-                    expected_records: int | None = None, query: str = "",
-                    **extra) -> dict:
+                    expected_records: int | None = None, query: str = "") -> dict:
     dyn = load_dynamic_targets()
     entry = {
         "label": label or key,
@@ -73,7 +72,6 @@ def register_target(key: str, label: str, url: str, collector_id: str = "",
         "query": query,
         "registered_at": utcnow(),
     }
-    entry.update(extra)                     # backend, api_url, api_header, …
     dyn[key] = entry
     _write_json(DYNAMIC_TARGETS_FILE, dyn)
     return entry

@@ -52,16 +52,6 @@
   .fineprint{font-size:.75rem;color:var(--dim);margin:10px 0 0}
   code{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.72rem}
 
-  /* ---------- backend picker ---------- */
-  .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
-  .mode{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;
-    color:var(--txt);font-size:.86rem;font-weight:700;text-align:left;cursor:pointer;line-height:1.35}
-  .mode .tiny{font-weight:400;color:var(--dim)}
-  .mode:hover{border-color:#33436b}
-  .mode.sel{border-color:var(--acc);background:rgba(129,140,248,.09);
-    box-shadow:0 0 0 1px var(--acc)}
-  #apiFields{margin-top:4px;border-left:2px solid var(--acc);padding-left:12px}
-
   /* ---------- job progress ---------- */
   #progressCard{display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
   ol.steps{list-style:none;margin:0;padding:0}
@@ -158,8 +148,6 @@
   .xbtn:hover{color:var(--txt)}
 
   .muted{color:var(--mut)} .tiny{font-size:.75rem} .dim{color:var(--dim)}
-  .bkbadge{display:inline-block;margin-left:6px;font-size:.68rem;color:var(--acc);
-    background:rgba(129,140,248,.12);border-radius:99px;padding:1px 7px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -193,26 +181,6 @@
         <button class="ex" type="button">product name and price</button>
       </div>
 
-      <div class="modes">
-        <button class="mode sel" data-bk="agent" type="button">🤖 AI Agent<br>
-          <span class="tiny">Bright Data builds &amp; runs it for you</span></button>
-        <button class="mode" data-bk="api" type="button">🔌 My own API<br>
-          <span class="tiny">POST url+query to your endpoint</span></button>
-      </div>
-
-      <div id="apiFields" style="display:none">
-        <label for="api_url">Your API endpoint
-          <span class="why">Receives POST {"url", "query"} — reply with JSON records</span>
-        </label>
-        <input type="text" id="api_url" placeholder="https://my-api.example.com/scrape"
-               spellcheck="false" autocomplete="off">
-        <label for="api_header">Auth header <span class="why">(optional)</span></label>
-        <input type="text" id="api_header" placeholder="Authorization: Bearer sk-…"
-               spellcheck="false" autocomplete="off">
-        <p class="fineprint">Any JSON with a list of objects works — keys like
-          <code>data</code>, <code>items</code>, <code>results</code> are detected automatically.</p>
-      </div>
-
       <button class="go" id="go">Start scraping →</button>
       <p class="fineprint">The first run teaches our AI the site (5–25 min). After that,
         re-runs take seconds. Every site gets its own card on the right.</p>
@@ -222,8 +190,8 @@
         <h2 style="margin-bottom:6px">Progress</h2>
         <ol class="steps" id="steps">
           <li data-s="queued"><span class="elapsed"></span>Request sent</li>
-          <li data-s="creating" data-agent="Teaching the AI this website" data-api="Calling your API">Teaching the AI this website<span class="elapsed"></span></li>
-          <li data-s="running" data-agent="Extracting the data" data-api="Validating the response">Extracting the data<span class="elapsed"></span></li>
+          <li data-s="creating">Teaching the AI this website<span class="elapsed"></span></li>
+          <li data-s="running">Extracting the data<span class="elapsed"></span></li>
           <li data-s="done">Checking quality &amp; saving history</li>
         </ol>
         <div id="errBox"></div>
@@ -311,15 +279,7 @@ function healthWord(st){
           BROKEN:['Broken','Extraction is failing on this site']}[st] || [st||'—',''];
 }
 
-/* ---------- backend picker + submit ---------- */
-let BACKEND = 'agent';
-document.querySelectorAll('.mode').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.mode').forEach(x => x.classList.remove('sel'));
-  b.classList.add('sel');
-  BACKEND = b.dataset.bk;
-  $('#apiFields').style.display = BACKEND === 'api' ? 'block' : 'none';
-});
-
+/* ---------- submit ---------- */
 document.querySelectorAll('.ex').forEach(b => b.onclick = () => {
   $('#query').value = 'scrape all ' + b.textContent;
   $('#query').focus();
@@ -331,30 +291,16 @@ $('#go').onclick = async () => {
     showErr('Almost there', 'Add a full web address (starting with https://) and describe what you want in the box above.');
     return;
   }
-  const api_url = ($('#api_url')||{value:''}).value.trim();
-  if (BACKEND === 'api' && !/^https?:\/\//.test(api_url)){
-    showErr('Almost there', 'Add your API endpoint URL — it will receive POST {"url", "query"}.');
-    return;
-  }
   resetProgress();
-  relabelSteps(BACKEND);
   try {
     const r = await fetch('/api/scrape', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url, query, backend:BACKEND,
-                           api_url, api_header:($('#api_header')||{value:''}).value.trim()})});
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, query})});
     const data = await r.json();
     if (!r.ok){ showErr('Could not start', data.error || 'Unknown error'); return; }
     logLine('info','▸ job '+data.job_id+' accepted');
     startProgress(data.job_id);
   } catch(e){ showErr('Network error', String(e)); }
 };
-
-function relabelSteps(bk){
-  document.querySelectorAll('#steps li[data-agent]').forEach(li => {
-    li.childNodes[0].textContent = bk === 'api' ? li.dataset.api : li.dataset.agent;
-  });
-}
 
 /* ---------- job progress ---------- */
 let progTimer = null;
@@ -496,8 +442,7 @@ async function loadCards(){
     return `<div class="card" data-i="${i}">
       <div class="toprow"><span class="name">${esc(t.label)}</span>
         <span class="chip ${chipCls}">${esc(chip)}</span></div>
-      <div class="plain">${t.query ? '“'+esc(String(t.query).slice(0,70))+'”' : esc(plain)}
-        <span class="bkbadge">${t.backend === 'api' ? '🔌 your API' : '🤖 agent'}</span></div>
+      <div class="plain">${t.query ? '“'+esc(String(t.query).slice(0,70))+'”' : esc(plain)}</div>
       ${score!=null ? `
       <div class="score-row"><span class="score" style="color:${h.status==='HEALTHY'?'var(--grn)':h.status==='DEGRADED'?'var(--yel)':'var(--red)'}">${score}%</span>
         <span class="score-lbl">health</span></div>

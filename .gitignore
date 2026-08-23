@@ -4,3 +4,13 @@ __pycache__/
 
 desktop/node_modules/
 desktop/dist/
+
+# local runtime state — every clone starts clean
+# (code auto-recreates these; demo/ HTML fixtures ARE shipped)
+data/runs.json
+data/events.json
+data/versions.json
+data/targets.json
+data/target_state.json
+data/jobs_*.json
+data/*_result.json
